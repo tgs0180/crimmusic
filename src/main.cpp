@@ -59,9 +59,43 @@ int main(int argc, char* argv[]){
         std::cerr << "ERROR: failed to start audio engine" << "\n";
         return 1;
     }
-    ma_engine_play_sound(&engine, songs[0].string().c_str(), NULL);
-    std::cout << "Playing: " << songs[0].string() << " Press Enter to quit." << "\n";
-    std::cin.get();
+    ma_sound sound;
+    ma_result result = ma_sound_init_from_file(&engine, songs[0].string().c_str(), MA_SOUND_FLAG_STREAM, NULL, NULL, &sound);
+    if (result != MA_SUCCESS) {
+        std::cerr << "Failed loading a song" << "\n";
+        ma_engine_uninit(&engine);
+        return 1;
+    }
+    ma_sound_start(&sound);
+    std::cout << "Playing: " << songs[0].string() << "\n";
+    std::string command;
+    
+    
+    
+    while (true) {
+        std::cout << "> ";
+        std::getline(std::cin, command);
+
+        if (command == "q") {
+            break;
+        }
+        else if (command == "p") {
+            bool isPlaying = ma_sound_is_playing(&sound);
+            if (isPlaying) ma_sound_stop(&sound);
+            else if (!isPlaying) ma_sound_start(&sound);
+        }
+        
+        
+        
+        else if (!std::getline(std::cin, command)) break;
+
+        else std::cout << "Command not found" << "\n";
+    }
+
+
+
+
+    ma_sound_uninit(&sound);
     ma_engine_uninit(&engine);
     return 0;
 }
