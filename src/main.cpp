@@ -4,6 +4,7 @@
 #include <string>
 #include <algorithm>
 #include <cctype>
+#include "miniaudio.h"
 
 namespace fs = std::filesystem;
 
@@ -39,18 +40,29 @@ int main(int argc, char* argv[]){
 
     fs::path root = argv[1];
 
-    // TODO E
     if (!fs::exists(root) || !fs::is_directory(root)) {
         std::cerr << "Not a folder: " << root.string() << "\n";
         return 1;
 
     }
     std::vector<fs::path> songs = findMp3s(root);
-    // TODO F
     std::cout << "Found " << songs.size() << " songs" << "\n";
     for (std::size_t i = 0; i < songs.size(); i++) {
         std::cout << i+1 << ". " << songs[i].string() << "\n";
     }
+    if (songs.empty()) {
+        std::cerr << "ERROR: No songs found" << "\n";
+        return 1;
+    }
+    ma_engine engine;
+    if (ma_engine_init(NULL, &engine) != MA_SUCCESS) {
+        std::cerr << "ERROR: failed to start audio engine" << "\n";
+        return 1;
+    }
+    ma_engine_play_sound(&engine, songs[0].string().c_str(), NULL);
+    std::cout << "Playing: " << songs[0].string() << " Press Enter to quit." << "\n";
+    std::cin.get();
+    ma_engine_uninit(&engine);
     return 0;
 }
 
