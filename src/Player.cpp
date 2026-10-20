@@ -26,6 +26,7 @@ bool Player::play(const std::filesystem::path &file) {
     return true;
 }
 
+
 void Player::togglePause() {
     if (!soundLoaded) return;
     bool isPlaying = ma_sound_is_playing(&sound);

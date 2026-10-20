@@ -1,3 +1,5 @@
+#include <cstddef>
+#include <exception>
 #include <iostream>
 #include <filesystem>
 #include <vector>
@@ -59,7 +61,7 @@ int main(int argc, char* argv[]){
     
     if (!player.play(songs[0])) return 1;
     std::string command;
-    
+    std::size_t current = 0;
     
     
     while (true) {
@@ -72,8 +74,36 @@ int main(int argc, char* argv[]){
         else if (command == "p") {
             player.togglePause();
         }
+
+        else if (command == "n") {
+            current += 1;
+            current = (current +1) % songs.size();
+            player.play(songs[current]);
+        }
+
+        else if (command == "b") {
+            if (current == 0) current = songs.size();
+            else current -= 1;
+            player.play(songs[current]);
+        }
         
-        else std::cout << "Command not found" << "\n";
+        else {
+            try {
+                int n = std::stoi(command);
+                if (n<1 || n > static_cast<int>(songs.size())) {
+                    std::cerr << "No song with that number..." << "\n";
+                }
+                else {
+                    if (player.play(songs[n-1])) {
+                    std::cout << "Playing: " << songs[n-1].string() << "n";
+                    current = n-1;
+                    }
+                }
+            }        
+            catch (const std::exception&) {
+                std::cerr << "Command not found" << "\n";
+            }
+        }
     }
 
 
