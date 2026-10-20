@@ -26,6 +26,9 @@ bool Player::play(const std::filesystem::path &file) {
     return true;
 }
 
+bool Player::isFinished() {
+    return soundLoaded && ma_sound_at_end(&sound);
+}
 
 void Player::togglePause() {
     if (!soundLoaded) return;
