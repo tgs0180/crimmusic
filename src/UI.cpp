@@ -31,8 +31,17 @@ bool UI::init() {
     SDL_SetRenderVSync(renderer, 1);           // wait for the screen refresh, otherwise it runs at 100% CPU
 
     ImGui::CreateContext();
+    auto fontAtlas = ImGui::GetIO().Fonts;
+    ImFontConfig config;
+    config.MergeMode = true;
+    fontAtlas->AddFontFromFileTTF("/usr/share/fonts/noto/NotoSans-Regular.ttf", 18.0f);
+    fontAtlas->AddFontFromFileTTF("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", 18.0f, & config);
+    fontAtlas->AddFontFromFileTTF("/usr/share/fonts/noto/NotoSansMath-Regular.ttf", 18.0f, &config);
+    
     ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer3_Init(renderer);
+
+    
     imguiReady = true;
     return true;
 }
@@ -42,6 +51,9 @@ bool UI::processEvents() {
     while (SDL_PollEvent(&event)) {
         ImGui_ImplSDL3_ProcessEvent(&event);
         if (event.type == SDL_EVENT_QUIT) return false;
+    }
+    if (quit) {
+        return false;
     }
     return true;
 }
@@ -58,6 +70,20 @@ void UI::draw(Player &player, Library &library) {
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
     ImGui::Begin("crimmusic", nullptr, flags);
 
+    if (ImGui::Button("≡##menu")) {
+        ImGui::OpenPopup("Menu");
+    }
+    if (ImGui::BeginPopup("Menu")){
+        ImGui::MenuItem("Choose folder");
+        ImGui::MenuItem("Settings");
+        ImGui::Separator();
+        if (ImGui::MenuItem("Quit")) quit = true;
+        
+        
+        ImGui::EndPopup();
+    }
+
+    ImGui::SameLine();
     ImGui::SetNextItemAllowOverlap();
     ImGui::SetNextItemWidth(-1);
     ImGui::InputTextWithHint("##search", "Search...", searchText, sizeof(searchText));

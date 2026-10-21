@@ -22,4 +22,5 @@ class UI {
         bool sdlReady = false;
         bool imguiReady = false;
         char searchText[128] = "";
+        bool quit{false};
 };
