@@ -38,6 +38,14 @@ int main(int argc, char* argv[]){
             library.next();
             player.play(library.currentSong());
         }
+        
+        fs::path newFolder;
+        if (ui.takeChosenFolder(newFolder)) {
+            if(library.scan(newFolder)) {
+                player.play(library.currentSong());
+            }
+        
+        }
         ui.draw(player, library);
     }
     return 0;

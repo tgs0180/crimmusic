@@ -5,16 +5,17 @@
 #include "StringUtils.hpp"
 
 bool Library::scan(const std::filesystem::path& root) {
-    songs.clear();
-    current = 0;
+    std::vector<std::filesystem::path> waitlist;
     for (const auto& entry : std::filesystem::recursive_directory_iterator(root, std::filesystem::directory_options::skip_permission_denied)) {
         if (!entry.is_regular_file()) continue;
         std::string extension = entry.path().extension().string();
         std::string extResult = toLower(extension);
         if (extResult != ".mp3") continue;
-        songs.push_back(entry.path());
-        
+        waitlist.push_back(entry.path());
     }
+    if (waitlist.empty()) return false;
+    songs = std::move(waitlist);
+    current = 0;
 
     std::sort(songs.begin(), songs.end());
     return !songs.empty();

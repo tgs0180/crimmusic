@@ -3,6 +3,9 @@ class Player;
 class Library;
 struct SDL_Window;
 struct SDL_Renderer;
+#include <string>
+#include <mutex>
+#include <filesystem>
 
 class UI {
     public:
@@ -14,7 +17,7 @@ class UI {
         bool init();
         bool processEvents();
         void draw(Player& player, Library& library);
-
+        bool takeChosenFolder(std::filesystem::path& out);
         
     private:
         SDL_Window* window = nullptr;
@@ -23,4 +26,9 @@ class UI {
         bool imguiReady = false;
         char searchText[128] = "";
         bool quit{false};
+        static void onFolderChosen(void* userdata, const char* const* filelist, int filter);
+
+        std::mutex folderMutex;
+        std::string chosenFolder;
+
 };

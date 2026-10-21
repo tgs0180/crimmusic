@@ -5,6 +5,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
+#include <SDL3/SDL_dialog.h>
 #include <iostream>
 #include <cstddef>
 #include "StringUtils.hpp"
@@ -14,6 +15,21 @@ static void splitTime(float seconds, int& minutes, int& secs) {
     int total = static_cast<int>(seconds);
     minutes = total / 60;
     secs = total % 60;
+}
+
+void UI::onFolderChosen(void *userdata, const char *const *filelist, int filter){
+    if (filelist == nullptr || filelist[0] == nullptr) return;
+    UI* ui = static_cast<UI*>(userdata);
+    std::lock_guard<std::mutex> lock(ui->folderMutex);
+    ui->chosenFolder = filelist[0];
+}
+
+bool UI::takeChosenFolder(std::filesystem::path &out) {
+    std::lock_guard<std::mutex> lock(folderMutex);   
+    if (chosenFolder.empty()) return false;
+    out = chosenFolder;
+    chosenFolder = "";
+    return true;
 }
 
 bool UI::init() {
@@ -74,8 +90,11 @@ void UI::draw(Player &player, Library &library) {
         ImGui::OpenPopup("Menu");
     }
     if (ImGui::BeginPopup("Menu")){
-        ImGui::MenuItem("Choose folder");
+        if (ImGui::MenuItem("Choose folder")) {
+            SDL_ShowOpenFolderDialog(onFolderChosen, this, window, nullptr, false);
+        }
         ImGui::MenuItem("Settings");
+        ImGui::MenuItem("Search 3rd party");
         ImGui::Separator();
         if (ImGui::MenuItem("Quit")) quit = true;
         
