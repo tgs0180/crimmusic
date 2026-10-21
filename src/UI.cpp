@@ -7,6 +7,7 @@
 #include "imgui_impl_sdlrenderer3.h"
 #include <iostream>
 #include <cstddef>
+#include "StringUtils.hpp"
 #include <string>
 
 static void splitTime(float seconds, int& minutes, int& secs) {
@@ -56,11 +57,17 @@ void UI::draw(Player &player, Library &library) {
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
     ImGui::Begin("crimmusic", nullptr, flags);
-    
+
+    ImGui::SetNextItemWidth(-1);
+    ImGui::InputTextWithHint("##search", "Search...", searchText, sizeof(searchText));
+    std::string query = toLower(searchText);
     float bottomBarHeight = ImGui::GetFrameHeightWithSpacing() * 2;
 
     ImGui::BeginChild("songlist", ImVec2(0, -bottomBarHeight), ImGuiChildFlags_Borders);
         for (std::size_t i = 0; i < library.size(); i++) {
+            std::string songname = library.song(i).filename().string();
+            songname = toLower(songname);
+            if (!query.empty() && songname.find(query) == std::string::npos) continue;
             if (ImGui::Selectable((std::to_string(i + 1) + ". " + library.song(i).filename().string()).c_str(), i == library.currentIndex())) {
                 library.setCurrent(i);
                 player.play(library.currentSong());
@@ -93,7 +100,7 @@ void UI::draw(Player &player, Library &library) {
 
     ImGui::SameLine();
     float rightSide = ImGui::CalcTextSize("00:00 / 00:00").x + 150 + ImGui::GetStyle().ItemSpacing.x * 2;
-    ImGui::SetNextItemWidth(-rightSide); // ! MAKE THIS USE THE REMAINING SPACE IN THE ROW
+    ImGui::SetNextItemWidth(-rightSide);
     float pos = player.position();
     if (ImGui::SliderFloat("##position", &pos, 0.0f, player.length(), "")) {
         player.seek(pos);

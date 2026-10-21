@@ -3,11 +3,7 @@
 #include <string>
 #include <algorithm>
 #include <cctype>
-
-static std::string toLower(std::string s) {
-    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {return std::tolower(c);});
-    return s;
-}
+#include "StringUtils.hpp"
 
 bool Library::scan(const std::filesystem::path& root) {
     songs.clear();
