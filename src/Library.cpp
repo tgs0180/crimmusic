@@ -5,6 +5,9 @@
 #include "StringUtils.hpp"
 
 bool Library::scan(const std::filesystem::path& root) {
+    std::error_code error;
+    if (!std::filesystem::is_directory(root, error)) return false;
+
     std::vector<std::filesystem::path> waitlist;
     for (const auto& entry : std::filesystem::recursive_directory_iterator(root, std::filesystem::directory_options::skip_permission_denied)) {
         if (!entry.is_regular_file()) continue;
@@ -41,11 +44,17 @@ void Library::setCurrent(std::size_t index) {
     current = index;
 }
 
+bool Library::empty() const {
+    return songs.empty();
+}
+
 void Library::next() {
+    if (songs.empty()) return;
     current = (current + 1) % songs.size();
 }
 
 void Library::previous() {
+    if (songs.empty()) return;
     if (current == 0) current = songs.size() - 1;
     else current -= 1;
 }

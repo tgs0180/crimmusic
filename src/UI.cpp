@@ -130,8 +130,13 @@ void UI::draw(Player &player, Library &library) {
             }
         }
     ImGui::EndChild();
-    ImGui::Text("Now playing: %s", library.currentSong().filename().string().c_str());
-    if (ImGui::Button("Previous")) {
+    if (library.empty()) {
+        ImGui::Text("No folder chosen, use the menu to choose one");
+    }
+    else {
+        ImGui::Text("Now playing: %s", library.currentSong().filename().string().c_str());
+    }
+    if (ImGui::Button("Previous") && !library.empty()) {
         library.previous();
         player.play(library.currentSong());
     }
@@ -149,7 +154,7 @@ void UI::draw(Player &player, Library &library) {
     }
 
     ImGui::SameLine();
-    if (ImGui::Button("Next")) {
+    if (ImGui::Button("Next") && !library.empty()) {
         library.next();
         player.play(library.currentSong());
     }

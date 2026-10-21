@@ -14,6 +14,7 @@ class Library {
         void setCurrent(std::size_t index);
         void next();
         void previous();
+        bool empty() const;
 
     private:
         std::vector<std::filesystem::path> songs;
