@@ -31,8 +31,7 @@ bool Player::isFinished() {
 }
 
 bool Player::isPlaying() {
-    if (ma_sound_is_playing(&sound)) return true;
-    return false;
+    return soundLoaded && ma_sound_is_playing(&sound);
 }
 
 void Player::togglePause() {
