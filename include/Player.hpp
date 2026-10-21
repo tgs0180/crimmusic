@@ -12,6 +12,7 @@ class Player {
         bool play(const std::filesystem::path&file);
         void togglePause();
         bool isFinished();
+        bool isPlaying();
         ~Player();
 
     private:
