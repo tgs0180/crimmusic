@@ -58,16 +58,27 @@ void UI::draw(Player &player, Library &library) {
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
     ImGui::Begin("crimmusic", nullptr, flags);
 
+    ImGui::SetNextItemAllowOverlap();
     ImGui::SetNextItemWidth(-1);
     ImGui::InputTextWithHint("##search", "Search...", searchText, sizeof(searchText));
     std::string query = toLower(searchText);
     float bottomBarHeight = ImGui::GetFrameHeightWithSpacing() * 2;
 
+    bool isEmpty = query.empty();
+    if (!isEmpty) {
+        float xpos = ImGui::GetItemRectMax().x - 20;
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(xpos);
+        if (ImGui::SmallButton("x##clearsearch")) {
+            searchText[0] = '\0';
+        }
+    }
+
     ImGui::BeginChild("songlist", ImVec2(0, -bottomBarHeight), ImGuiChildFlags_Borders);
         for (std::size_t i = 0; i < library.size(); i++) {
             std::string songname = library.song(i).filename().string();
             songname = toLower(songname);
-            if (!query.empty() && songname.find(query) == std::string::npos) continue;
+            if (!isEmpty && songname.find(query) == std::string::npos) continue;
             if (ImGui::Selectable((std::to_string(i + 1) + ". " + library.song(i).filename().string()).c_str(), i == library.currentIndex())) {
                 library.setCurrent(i);
                 player.play(library.currentSong());

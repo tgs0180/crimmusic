@@ -2,7 +2,6 @@
 #include <cstddef>
 #include <string>
 #include <algorithm>
-#include <cctype>
 #include "StringUtils.hpp"
 
 bool Library::scan(const std::filesystem::path& root) {
