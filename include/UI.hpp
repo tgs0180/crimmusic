@@ -21,4 +21,5 @@ class UI {
         SDL_Renderer* renderer = nullptr;
         bool sdlReady = false;
         bool imguiReady = false;
+        
 };

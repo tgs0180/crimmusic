@@ -34,6 +34,35 @@ bool Player::isPlaying() {
     return soundLoaded && ma_sound_is_playing(&sound);
 }
 
+void Player::setVolume(float volume) {
+    if (!engineReady) return;
+    ma_engine_set_volume(&engine, volume);
+}
+
+float Player::volume() {
+    if (!engineReady) return 0.0f;
+    return ma_engine_get_volume(&engine);
+}
+
+float Player::position() {
+    if (!soundLoaded) return 0.0f;
+    float seconds = 0.0f;
+    ma_sound_get_cursor_in_seconds(&sound, &seconds);
+    return seconds;
+}
+
+float Player::length() {
+    if (!soundLoaded) return 0.0f;
+    float seconds = 0.0f;
+    ma_sound_get_length_in_seconds(&sound, &seconds);
+    return seconds;
+}
+
+void Player::seek(float seconds) {
+    if (!soundLoaded) return;
+    ma_sound_seek_to_second(&sound, seconds);
+}
+
 void Player::togglePause() {
     if (!soundLoaded) return;
     bool isPlaying = ma_sound_is_playing(&sound);

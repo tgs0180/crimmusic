@@ -40,7 +40,7 @@ bool UI::processEvents() {
     }
     return true;
 }
-
+// decides what gets drawn.
 void UI::draw(Player &player, Library &library) {
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
@@ -68,6 +68,7 @@ void UI::draw(Player &player, Library &library) {
         library.previous();
         player.play(library.currentSong());
     }
+
     ImGui::SameLine();
     if (player.isPlaying()) {
         if (ImGui::Button("Pause")) {
@@ -79,12 +80,25 @@ void UI::draw(Player &player, Library &library) {
             player.togglePause();
         }
     }
-    
-    
+
     ImGui::SameLine();
     if (ImGui::Button("Next")) {
         library.next();
         player.play(library.currentSong());
+    }
+
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(750);
+    float pos = player.position();
+    if (ImGui::SliderFloat("##position", &pos, 0.0f, player.length(), "")) {
+        player.seek(pos);
+    }
+    
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(150);
+    float vol = player.volume() * 100;
+    if (ImGui::SliderFloat("##volume", &vol, 0.0f, 100.0f, "%.0f%%")) {
+        player.setVolume(vol/100.0f);
     }
     
     ImGui::End();

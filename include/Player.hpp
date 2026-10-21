@@ -13,6 +13,11 @@ class Player {
         void togglePause();
         bool isFinished();
         bool isPlaying();
+        void setVolume(float volume);
+        float volume();
+        float position();
+        float length();
+        void seek(float seconds);
         ~Player();
 
     private:
