@@ -9,7 +9,11 @@
 #include <cstddef>
 #include <string>
 
-
+static void splitTime(float seconds, int& minutes, int& secs) {
+    int total = static_cast<int>(seconds);
+    minutes = total / 60;
+    secs = total % 60;
+}
 
 bool UI::init() {
     if (!SDL_Init(SDL_INIT_VIDEO)) {           // SDL3: returns true on success (SDL2 was the opposite!)
@@ -88,12 +92,18 @@ void UI::draw(Player &player, Library &library) {
     }
 
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(750);
+    float rightSide = ImGui::CalcTextSize("00:00 / 00:00").x + 150 + ImGui::GetStyle().ItemSpacing.x * 2;
+    ImGui::SetNextItemWidth(-rightSide); // ! MAKE THIS USE THE REMAINING SPACE IN THE ROW
     float pos = player.position();
     if (ImGui::SliderFloat("##position", &pos, 0.0f, player.length(), "")) {
         player.seek(pos);
     }
-    
+    ImGui::SameLine();
+    int posMin, posSec, lenMin, lenSec;
+    splitTime(pos, posMin, posSec);
+    splitTime(player.length(), lenMin, lenSec);
+    ImGui::Text("%d:%02d / %d:%02d", posMin, posSec, lenMin, lenSec);
+
     ImGui::SameLine();
     ImGui::SetNextItemWidth(150);
     float vol = player.volume() * 100;
