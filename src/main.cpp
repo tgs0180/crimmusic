@@ -1,6 +1,7 @@
 #include <iostream>
 #include <filesystem>
 #include "Player.hpp"
+#include "Soundcloud.hpp"
 #include "UI.hpp"
 #include "Library.hpp"
 #include "Settings.hpp"
@@ -13,6 +14,7 @@ int main(int argc, char* argv[]){
     if (argc > 1) root = argv[1];
     else root = settings.musicFolder;
 
+    SoundCloud soundcloud;
     Library library;
     Player player;
     if (!player.init()) return 1;
@@ -39,7 +41,7 @@ int main(int argc, char* argv[]){
             }
         
         }
-        ui.draw(player, library);
+        ui.draw(player, library, soundcloud);
     }
     settings.volume = player.volume();
     settings.save();

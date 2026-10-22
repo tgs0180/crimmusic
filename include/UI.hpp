@@ -1,6 +1,7 @@
 #pragma once
 class Player;
 class Library;
+class SoundCloud;
 struct SDL_Window;
 struct SDL_Renderer;
 #include <string>
@@ -16,7 +17,7 @@ class UI {
 
         bool init();
         bool processEvents();
-        void draw(Player& player, Library& library);
+        void draw(Player& player, Library& library, SoundCloud& soundcloud);
         bool takeChosenFolder(std::filesystem::path& out);
         
     private:
@@ -27,6 +28,8 @@ class UI {
         char searchText[128] = "";
         bool quit{false};
         static void onFolderChosen(void* userdata, const char* const* filelist, int filter);
+        bool showSoundCloud{false};
+        char soundCloudQuery[128] = "";
 
         std::mutex folderMutex;
         std::string chosenFolder;

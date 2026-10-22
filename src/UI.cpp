@@ -2,6 +2,7 @@
 #include "Player.hpp"
 #include "Library.hpp"
 #include <SDL3/SDL.h>
+#include "Soundcloud.hpp"
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
@@ -74,7 +75,7 @@ bool UI::processEvents() {
     return true;
 }
 // decides what gets drawn.
-void UI::draw(Player &player, Library &library) {
+void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
@@ -94,7 +95,9 @@ void UI::draw(Player &player, Library &library) {
             SDL_ShowOpenFolderDialog(onFolderChosen, this, window, nullptr, false);
         }
         ImGui::MenuItem("Settings");
-        ImGui::MenuItem("Search 3rd party");
+        if (ImGui::MenuItem("Search 3rd party")) {
+            showSoundCloud = true;
+        }
         ImGui::Separator();
         if (ImGui::MenuItem("Quit")) quit = true;
         
@@ -180,6 +183,46 @@ void UI::draw(Player &player, Library &library) {
     }
     
     ImGui::End();
+
+    if (showSoundCloud) {
+        ImGui::Begin("SoundCloud", &showSoundCloud);
+        SearchSnapshot snap = soundcloud.snapshot();
+        bool busy = (snap.state == SearchState::Searching);
+        ImGui::BeginDisabled(busy);
+        bool enter = ImGui::InputTextWithHint("##scquery", "Search soundcloud...", soundCloudQuery, sizeof(soundCloudQuery), ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::SameLine();
+        bool clicked = ImGui::Button("Search");
+        ImGui::EndDisabled();
+        if (enter || clicked) {
+            if (soundCloudQuery[0] != '\0') {
+                soundcloud.startSearch(soundCloudQuery);
+            }
+        }
+        if (snap.state == SearchState::Searching) ImGui::Text("Searching...");
+        else if (snap.state == SearchState::Error) ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "%s", snap.error.c_str());
+        else if (snap.state == SearchState::Results && snap.results.empty()) ImGui::Text("No results");
+        else if (snap.state == SearchState::Results) {
+            if (ImGui::BeginTable("scresults", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+                ImGui::TableSetupColumn("Title");
+                ImGui::TableSetupColumn("Uploader");
+                ImGui::TableSetupColumn("Duration");
+                ImGui::TableHeadersRow();
+                for (const RemoteTrack& track : snap.results) {
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    ImGui::TextUnformatted(track.title.c_str());
+                    ImGui::TableNextColumn();
+                    ImGui::TextUnformatted(track.uploader.c_str());
+                    ImGui::TableNextColumn();
+                    int minutes, seconds;
+                    splitTime(track.duration, minutes, seconds);
+                    ImGui::Text("%d:%02d", minutes, seconds);
+                }
+                ImGui::EndTable();
+            }
+        }
+        ImGui::End();
+    }
 
     ImGui::Render();
     SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);

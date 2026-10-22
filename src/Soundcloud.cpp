@@ -3,6 +3,7 @@
 #include <SDL3/SDL_process.h>
 #include <cstddef>
 #include <exception>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include <sstream>
 
@@ -51,3 +52,31 @@ SearchSnapshot SoundCloud::snapshot() {
     return shared;
 }
 
+void SoundCloud::searchWorker(std::string query) {
+    std::vector<RemoteTrack> localResults;
+    std::string error;
+    bool ok = runSearch(query, localResults, error);
+    std::lock_guard<std::mutex> lock(mutex);
+    if (ok) {
+        shared.results = std::move(localResults);
+        shared.state = SearchState::Results;
+    }
+    else {
+        shared.error = error;
+        shared.state = SearchState::Error;
+    }
+
+}
+
+void SoundCloud::startSearch(const std::string &query) {
+    std::lock_guard<std::mutex> lock(mutex);
+    if (shared.state == SearchState::Searching) return;
+    shared.state = SearchState::Searching;
+    shared.error = "";
+    if (searchThread.joinable()) searchThread.join();
+    searchThread = std::thread(&SoundCloud::searchWorker, this, query);
+}
+
+SoundCloud::~SoundCloud() {
+    if (searchThread.joinable()) searchThread.join();
+}
