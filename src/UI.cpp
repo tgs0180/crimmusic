@@ -185,6 +185,7 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     ImGui::End();
 
     if (showSoundCloud) {
+        ImGui::SetNextWindowSize(ImVec2(700, 400), ImGuiCond_Appearing);
         ImGui::Begin("SoundCloud", &showSoundCloud);
         SearchSnapshot snap = soundcloud.snapshot();
         bool busy = (snap.state == SearchState::Searching);
