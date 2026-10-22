@@ -6,6 +6,7 @@
 class Library {
     public:
         bool scan(const std::filesystem::path& root);
+        bool rescan();
         std::size_t size() const;  
         const std::filesystem::path& song(std::size_t index) const;
         
@@ -19,4 +20,5 @@ class Library {
     private:
         std::vector<std::filesystem::path> songs;
         std::size_t current = 0;
+        std::filesystem::path folder;
 };

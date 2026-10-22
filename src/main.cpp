@@ -23,6 +23,7 @@ int main(int argc, char* argv[]){
         std::cout << "Found " << library.size() << " songs" << "\n";
         if (!player.play(library.currentSong())) return 1;
     }
+    soundcloud.setDownloadFolder(root);
 
     UI ui;
     if (!ui.init()) return 1;
@@ -38,8 +39,12 @@ int main(int argc, char* argv[]){
             if(library.scan(newFolder)) {
                 player.play(library.currentSong());
                 settings.musicFolder = newFolder;
+                soundcloud.setDownloadFolder(newFolder);
             }
-        
+        }
+
+        if (soundcloud.takeFinishedDownloads()) {
+            library.rescan();
         }
         ui.draw(player, library, soundcloud);
     }

@@ -203,12 +203,18 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
         else if (snap.state == SearchState::Error) ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "%s", snap.error.c_str());
         else if (snap.state == SearchState::Results && snap.results.empty()) ImGui::Text("No results");
         else if (snap.state == SearchState::Results) {
-            if (ImGui::BeginTable("scresults", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+            if (ImGui::BeginTable("scresults", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
                 ImGui::TableSetupColumn("Title");
                 ImGui::TableSetupColumn("Uploader");
                 ImGui::TableSetupColumn("Duration");
+                ImGui::TableSetupColumn("");
                 ImGui::TableHeadersRow();
                 for (const RemoteTrack& track : snap.results) {
+                    ImGui::PushID(track.id.c_str());
+                    const Download* download = nullptr;
+                    for (const Download& d : snap.downloads) {
+                        if (d.track.id == track.id) download = &d;
+                    }
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn();
                     ImGui::TextUnformatted(track.title.c_str());
@@ -218,6 +224,20 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
                     int minutes, seconds;
                     splitTime(track.duration, minutes, seconds);
                     ImGui::Text("%d:%02d", minutes, seconds);
+                    ImGui::TableNextColumn();
+                    if (download == nullptr) {
+                        if (ImGui::SmallButton("Download MP3")) soundcloud.startDownload(track);
+                    }
+                    else if (download->state == DownloadState::Downloading) {
+                        ImGui::TextDisabled("Downloading...");
+                    }
+                    else if (download->state == DownloadState::Done) {
+                        ImGui::Text("Done");
+                    }
+                    else {
+                        if (ImGui::SmallButton("Failed - retry")) soundcloud.startDownload(track);
+                    }
+                    ImGui::PopID();
                 }
                 ImGui::EndTable();
             }

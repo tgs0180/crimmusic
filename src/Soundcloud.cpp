@@ -77,6 +77,73 @@ void SoundCloud::startSearch(const std::string &query) {
     searchThread = std::thread(&SoundCloud::searchWorker, this, query);
 }
 
+
+
+bool SoundCloud::runDownload(const std::string &url, const std::filesystem::path &folder, std::string &error) {
+    std::string folderstr = folder.string();
+    const char* args[] = {"yt-dlp", "-x", "--audio-format", "mp3", "--no-playlist", "--no-warnings", "-P", folderstr.c_str(), "-o", "%(uploader)s - %(title)s.%(ext)s", "--", url.c_str(), nullptr};
+    SDL_Process* process = SDL_CreateProcess(args, true);
+    if (process == nullptr) {
+        error = "Could not start yt-dlp";
+        return false;
+    }
+    size_t size;
+    int exitcode = -1;
+    void* data = SDL_ReadProcess(process, &size, &exitcode);
+    if (data != nullptr) {
+        SDL_free(data);
+    }
+    SDL_DestroyProcess(process);
+    if (exitcode != 0) error = "Exitcode error";
+    return exitcode == 0;
+}
+
+void SoundCloud::downloadWorker(RemoteTrack track, std::filesystem::path folder) {
+    std::string error;
+    bool ok = runDownload(track.url, folder, error);
+    std::lock_guard<std::mutex> lock(mutex);
+    for (Download& download : shared.downloads) {
+        if (download.track.id == track.id){
+            if (ok) download.state = DownloadState::Done;
+            else download.state = DownloadState::Failed;
+            break;
+        }
+    }
+    if (ok) downloadFinished = true;
+}
+
+bool SoundCloud::takeFinishedDownloads() {
+    std::lock_guard<std::mutex> lock(mutex);
+    bool finished = downloadFinished;
+    downloadFinished = false;
+    return finished;
+}
+
+void SoundCloud::startDownload(const RemoteTrack &track) {
+    if (downloadFolder.empty()) return;
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        bool found = false;
+        for (Download& download : shared.downloads) {
+            if (download.track.id == track.id) {
+                if (download.state != DownloadState::Failed) return;   // already downloading or done
+                download.state = DownloadState::Downloading;            // retry after a failure
+                found = true;
+                break;
+            }
+        }
+        if (!found) shared.downloads.push_back(Download{track});
+    }
+    downloadThreads.emplace_back(&SoundCloud::downloadWorker, this, track, downloadFolder);
+}
+
+void SoundCloud::setDownloadFolder(const std::filesystem::path &folder) {
+    downloadFolder = folder;
+}
+
 SoundCloud::~SoundCloud() {
     if (searchThread.joinable()) searchThread.join();
+    for (std::thread& thread : downloadThreads) {
+        if (thread.joinable()) thread.join();
+    }
 }

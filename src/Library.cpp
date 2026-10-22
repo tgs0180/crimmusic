@@ -17,11 +17,27 @@ bool Library::scan(const std::filesystem::path& root) {
         waitlist.push_back(entry.path());
     }
     if (waitlist.empty()) return false;
-    songs = std::move(waitlist);
-    current = 0;
 
-    std::sort(songs.begin(), songs.end());
-    return !songs.empty();
+    // remember which song was current, so a rescan doesn't lose our place
+    std::filesystem::path previous;
+    if (!songs.empty()) previous = songs[current];
+
+    std::sort(waitlist.begin(), waitlist.end());
+    songs = std::move(waitlist);
+    folder = root;
+
+    current = 0;
+    for (std::size_t i = 0; i < songs.size(); i++) {
+        if (songs[i] == previous) {
+            current = i;
+            break;
+        }
+    }
+    return true;
+}
+
+bool Library::rescan() {
+    return !folder.empty() && scan(folder);
 }
 
 std::size_t Library::size() const {
