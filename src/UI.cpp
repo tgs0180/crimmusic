@@ -8,6 +8,7 @@
 #include "imgui_impl_sdlrenderer3.h"
 #include <SDL3/SDL_dialog.h>
 #include <SDL3/SDL_render.h>
+#include <cstdint>
 #include <iostream>
 #include <cstddef>
 #include "StringUtils.hpp"
@@ -17,6 +18,17 @@ static void splitTime(float seconds, int& minutes, int& secs) {
     int total = static_cast<int>(seconds);
     minutes = total / 60;
     secs = total % 60;
+}
+
+static std::string fitText(const std::string& text, float maximumWidth){
+    if (ImGui::CalcTextSize(text.c_str()).x <= maximumWidth) return text;
+    std::string looptext = text;
+    for (char& c : looptext) {
+        looptext.pop_back();
+        while (!looptext.empty() && (static_cast<unsigned char>(looptext.back()) & 0xC0) == 0x80) looptext.pop_back();
+        if (ImGui::CalcTextSize((looptext + "...").c_str()).x <= maximumWidth || looptext.empty()) return looptext + "...";
+    }
+    return looptext + "...";
 }
 
 void UI::onFolderChosen(void *userdata, const char *const *filelist, int filter){
@@ -125,14 +137,38 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     }
 
     ImGui::BeginChild("songlist", ImVec2(0, -bottomBarHeight), ImGuiChildFlags_Borders);
+        float tile = CoverCache::coverSize;
+        float spacing = ImGui::GetStyle().ItemSpacing.x;
+        float available = ImGui::GetContentRegionAvail().x;
+        int columns = std::max(1, static_cast<int>((available + spacing) / (tile + spacing)));
+        int shown{0};
         for (std::size_t i = 0; i < library.size(); i++) {
             const Track& track = library.song(i);
             std::string label = track.title + " - " + track.artist;
             if (!isEmpty && toLower(label).find(query) == std::string::npos) continue;
-            if (ImGui::Selectable((std::to_string(i + 1) + ". " + label).c_str(), i == library.currentIndex())) {
+            if (shown % columns != 0) ImGui::SameLine();
+            shown++;
+            ImGui::PushID(static_cast<int>(i));
+            ImGui::BeginGroup();
+            if (ImGui::IsRectVisible(ImVec2(tile, tile))) covers.request(track.file);
+            SDL_Texture* tex = covers.get(track.file);
+            bool clicked;
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0,0));
+            if (tex != nullptr) clicked = ImGui::ImageButton("##cover", (ImTextureID)(intptr_t)tex, ImVec2(tile, tile));
+            else clicked = ImGui::Button("##cover", ImVec2(tile, tile));
+            ImGui::PopStyleVar();
+            if (i == library.currentIndex()) {
+                ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), IM_COL32(255,255,255,255), 0.0f, 0,3.0f);
+            }
+            ImGui::TextUnformatted(fitText(track.title, tile).c_str());
+            ImGui::TextDisabled("%s", fitText(track.artist, tile).c_str());
+            ImGui::EndGroup();
+            ImGui::PopID();
+            if (clicked) {
                 library.setCurrent(i);
                 player.play(library.currentSong());
             }
+            
         }
     ImGui::EndChild();
     if (library.empty()) {
@@ -141,9 +177,6 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     else {
         const Track& playing = library.song(library.currentIndex());
         ImGui::Text("Now playing: %s - %s", playing.title.c_str(), playing.artist.c_str());
-        covers.request(library.currentSong());
-        SDL_Texture* tex = covers.get(library.currentSong());
-        if (tex != nullptr) ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(160, 160));
     }
     if (ImGui::Button("Previous") && !library.empty()) {
         library.previous();
