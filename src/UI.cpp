@@ -124,10 +124,10 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
 
     ImGui::BeginChild("songlist", ImVec2(0, -bottomBarHeight), ImGuiChildFlags_Borders);
         for (std::size_t i = 0; i < library.size(); i++) {
-            std::string songname = library.song(i).filename().string();
-            songname = toLower(songname);
-            if (!isEmpty && songname.find(query) == std::string::npos) continue;
-            if (ImGui::Selectable((std::to_string(i + 1) + ". " + library.song(i).filename().string()).c_str(), i == library.currentIndex())) {
+            const Track& track = library.song(i);
+            std::string label = track.title + " - " + track.artist;
+            if (!isEmpty && toLower(label).find(query) == std::string::npos) continue;
+            if (ImGui::Selectable((std::to_string(i + 1) + ". " + label).c_str(), i == library.currentIndex())) {
                 library.setCurrent(i);
                 player.play(library.currentSong());
             }
@@ -137,7 +137,8 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
         ImGui::Text("No folder chosen, use the menu to choose one");
     }
     else {
-        ImGui::Text("Now playing: %s", library.currentSong().filename().string().c_str());
+        const Track& playing = library.song(library.currentIndex());
+        ImGui::Text("Now playing: %s - %s", playing.title.c_str(), playing.artist.c_str());
     }
     if (ImGui::Button("Previous") && !library.empty()) {
         library.previous();

@@ -2,13 +2,14 @@
 #include <filesystem>
 #include <vector>
 #include <cstddef>
+#include "Track.hpp"
 
 class Library {
     public:
         bool scan(const std::filesystem::path& root);
         bool rescan();
         std::size_t size() const;  
-        const std::filesystem::path& song(std::size_t index) const;
+        const Track& song(std::size_t index) const;
         
         std::size_t currentIndex() const;
         const std::filesystem::path& currentSong() const;
@@ -18,7 +19,7 @@ class Library {
         bool empty() const;
 
     private:
-        std::vector<std::filesystem::path> songs;
+        std::vector<Track> songs;
         std::size_t current = 0;
         std::filesystem::path folder;
 };

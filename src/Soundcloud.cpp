@@ -81,7 +81,7 @@ void SoundCloud::startSearch(const std::string &query) {
 
 bool SoundCloud::runDownload(const std::string &url, const std::filesystem::path &folder, std::string &error) {
     std::string folderstr = folder.string();
-    const char* args[] = {"yt-dlp", "-x", "--audio-format", "mp3", "--no-playlist", "--no-warnings", "-P", folderstr.c_str(), "-o", "%(uploader)s - %(title)s.%(ext)s", "--", url.c_str(), nullptr};
+    const char* args[] = {"yt-dlp", "-x", "--audio-format", "mp3","--embed-thumbnail", "--embed-metadata", "--no-playlist", "--no-warnings", "-P", folderstr.c_str(), "-o", "%(uploader)s - %(title)s.%(ext)s", "--", url.c_str(), nullptr};
     SDL_Process* process = SDL_CreateProcess(args, true);
     if (process == nullptr) {
         error = "Could not start yt-dlp";
