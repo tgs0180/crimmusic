@@ -5,6 +5,7 @@
 #include "UI.hpp"
 #include "Library.hpp"
 #include "Settings.hpp"
+#include "Mpris.hpp"
 
 namespace fs = std::filesystem;
 
@@ -25,10 +26,14 @@ int main(int argc, char* argv[]){
     }
     soundcloud.setDownloadFolder(root);
 
+    Mpris mpris;
+    if (!mpris.init(player, library)) std::cerr << "MPRIS not available, media keys wont work\n";
+
     UI ui;
     if (!ui.init()) return 1;
 
     while (ui.processEvents()) {
+        mpris.poll();
         if (player.isFinished()) {
             if (library.repeatMode() == RepeatMode::One) player.play(library.currentSong());
             else if (library.repeatMode() == RepeatMode::Off) {
