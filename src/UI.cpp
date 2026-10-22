@@ -7,6 +7,7 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
 #include <SDL3/SDL_dialog.h>
+#include <SDL3/SDL_render.h>
 #include <iostream>
 #include <cstddef>
 #include "StringUtils.hpp"
@@ -76,6 +77,7 @@ bool UI::processEvents() {
 }
 // decides what gets drawn.
 void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
+    covers.update(renderer);
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
@@ -139,6 +141,9 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     else {
         const Track& playing = library.song(library.currentIndex());
         ImGui::Text("Now playing: %s - %s", playing.title.c_str(), playing.artist.c_str());
+        covers.request(library.currentSong());
+        SDL_Texture* tex = covers.get(library.currentSong());
+        if (tex != nullptr) ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(160, 160));
     }
     if (ImGui::Button("Previous") && !library.empty()) {
         library.previous();
@@ -254,6 +259,7 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
 }
 
 UI::~UI() {
+    covers.clear();
     if (imguiReady) {
         ImGui_ImplSDLRenderer3_Shutdown();
         ImGui_ImplSDL3_Shutdown();

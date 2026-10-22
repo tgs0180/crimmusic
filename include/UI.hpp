@@ -7,6 +7,7 @@ struct SDL_Renderer;
 #include <string>
 #include <mutex>
 #include <filesystem>
+#include "CoverCache.hpp"
 
 class UI {
     public:
@@ -33,5 +34,7 @@ class UI {
 
         std::mutex folderMutex;
         std::string chosenFolder;
+
+        CoverCache covers;
 
 };
