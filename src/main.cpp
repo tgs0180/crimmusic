@@ -30,8 +30,14 @@ int main(int argc, char* argv[]){
 
     while (ui.processEvents()) {
         if (player.isFinished()) {
-            library.next();
-            player.play(library.currentSong());
+            if (library.repeatMode() == RepeatMode::One) player.play(library.currentSong());
+            else if (library.repeatMode() == RepeatMode::Off) {
+                if (library.atEnd()) player.stop();
+                else {library.next(); player.play(library.currentSong());}
+            }
+            else if (library.repeatMode() == RepeatMode::All) {
+                library.next(); player.play(library.currentSong());
+            }
         }
         
         fs::path newFolder;

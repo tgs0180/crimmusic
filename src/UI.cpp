@@ -20,6 +20,10 @@ static void splitTime(float seconds, int& minutes, int& secs) {
     secs = total % 60;
 }
 
+static float ButtonWidth(const char* label) {
+    return ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2;
+}
+
 static std::string fitText(const std::string& text, float maximumWidth){
     if (ImGui::CalcTextSize(text.c_str()).x <= maximumWidth) return text;
     std::string looptext = text;
@@ -202,7 +206,7 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     }
 
     ImGui::SameLine();
-    float rightSide = ImGui::CalcTextSize("00:00 / 00:00").x + 150 + ImGui::GetStyle().ItemSpacing.x * 2;
+    float rightSide = ImGui::CalcTextSize("00:00 / 00:00").x + + 150 + ImGui::GetStyle().ItemSpacing.x * 3 + ButtonWidth("Repeat");
     ImGui::SetNextItemWidth(-rightSide);
     float pos = player.position();
     if (ImGui::SliderFloat("##position", &pos, 0.0f, player.length(), "")) {
@@ -213,6 +217,13 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     splitTime(pos, posMin, posSec);
     splitTime(player.length(), lenMin, lenSec);
     ImGui::Text("%d:%02d / %d:%02d", posMin, posSec, lenMin, lenSec);
+
+    ImGui::SameLine();
+    if (ImGui::Button("Repeat")) {
+        if (library.repeatMode() == RepeatMode::All) library.setRepeatMode(RepeatMode::Off);
+        else if (library.repeatMode() == RepeatMode::Off) library.setRepeatMode(RepeatMode::One);
+        else if (library.repeatMode() == RepeatMode::One) library.setRepeatMode(RepeatMode::All);
+    }
 
     ImGui::SameLine();
     ImGui::SetNextItemWidth(150);

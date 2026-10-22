@@ -91,3 +91,16 @@ void Library::previous() {
     if (current == 0) current = songs.size() - 1;
     else current -= 1;
 }
+
+RepeatMode Library::repeatMode() const {
+    return repeat;
+}
+
+void Library::setRepeatMode(enum RepeatMode mode) {
+    repeat = mode;
+}
+
+bool Library::atEnd() const {
+    if (songs.empty()) return true;
+    return (current == songs.size() - 1);
+}

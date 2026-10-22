@@ -71,6 +71,11 @@ void Player::togglePause() {
 
 }
 
+void Player::stop() {
+    if (soundLoaded) ma_sound_uninit(&sound);
+    soundLoaded = false;
+}
+
 Player::~Player() {
     if (soundLoaded) ma_sound_uninit(&sound);
     if (engineReady) ma_engine_uninit(&engine);

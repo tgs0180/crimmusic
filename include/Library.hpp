@@ -4,6 +4,10 @@
 #include <cstddef>
 #include "Track.hpp"
 
+enum class RepeatMode {Off, All, One};
+
+
+
 class Library {
     public:
         bool scan(const std::filesystem::path& root);
@@ -17,9 +21,13 @@ class Library {
         void next();
         void previous();
         bool empty() const;
+        RepeatMode repeatMode() const;
+        void setRepeatMode(RepeatMode mode);
+        bool atEnd() const;
 
     private:
         std::vector<Track> songs;
         std::size_t current = 0;
         std::filesystem::path folder;
+        RepeatMode repeat = RepeatMode::All;
 };

@@ -18,6 +18,7 @@ class Player {
         float position();
         float length();
         void seek(float seconds);
+        void stop();
         ~Player();
 
     private:
