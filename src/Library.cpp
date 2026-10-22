@@ -50,6 +50,8 @@ bool Library::scan(const std::filesystem::path& root) {
             break;
         }
     }
+    // the number of songs may have changed, so the old shuffled order is no longer valid
+    if (shuffle) buildOrder();
     return true;
 }
 
@@ -75,6 +77,8 @@ const std::filesystem::path& Library::currentSong() const {
 
 void Library::setCurrent(std::size_t index) {
     current = index;
+    // start a fresh shuffled order from the song that was picked
+    if (shuffle) buildOrder();
 }
 
 bool Library::empty() const {
@@ -83,13 +87,24 @@ bool Library::empty() const {
 
 void Library::next() {
     if (songs.empty()) return;
-    current = (current + 1) % songs.size();
+    if (shuffle) {
+        orderPosition = (orderPosition + 1) % order.size();
+        current = order[orderPosition];
+    }
+    else current = (current + 1) % songs.size();
 }
 
 void Library::previous() {
     if (songs.empty()) return;
-    if (current == 0) current = songs.size() - 1;
-    else current -= 1;
+    if (shuffle) {
+        if (orderPosition == 0) orderPosition = order.size() - 1;
+        else orderPosition -= 1;
+        current = order[orderPosition];
+    }
+    else {
+        if (current == 0) current = songs.size() - 1;
+        else current -= 1;
+    }
 }
 
 RepeatMode Library::repeatMode() const {
@@ -102,5 +117,25 @@ void Library::setRepeatMode(enum RepeatMode mode) {
 
 bool Library::atEnd() const {
     if (songs.empty()) return true;
-    return (current == songs.size() - 1);
+    if (shuffle) return orderPosition == order.size() -1;
+    else return current == songs.size() - 1;
+}
+
+void Library::buildOrder() {
+    order.resize(songs.size());
+    std::iota(order.begin(), order.end(), 0);
+    std::shuffle(order.begin(), order.end(), rng);
+    for (std::size_t i = 0; i < order.size(); i++) {
+        if (order[i] == current) {std::swap(order[0], order[i]); break;}
+    }
+    orderPosition = 0;
+}
+
+bool Library::shuffled() const {
+    return shuffle;
+}
+
+void Library::setShuffle(bool on) {
+    shuffle = on;
+    if (shuffle) buildOrder();
 }

@@ -3,6 +3,7 @@
 #include <vector>
 #include <cstddef>
 #include "Track.hpp"
+#include <random>
 
 enum class RepeatMode {Off, All, One};
 
@@ -24,10 +25,17 @@ class Library {
         RepeatMode repeatMode() const;
         void setRepeatMode(RepeatMode mode);
         bool atEnd() const;
+        bool shuffled() const;
+        void setShuffle(bool on);
 
     private:
         std::vector<Track> songs;
         std::size_t current = 0;
         std::filesystem::path folder;
         RepeatMode repeat = RepeatMode::All;
+        bool shuffle{false};
+        std::vector<std::size_t> order;
+        std::size_t orderPosition{0};
+        std::mt19937 rng{std::random_device{}()};
+        void buildOrder();
 };

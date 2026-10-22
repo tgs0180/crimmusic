@@ -8,6 +8,7 @@ struct SDL_Renderer;
 #include <mutex>
 #include <filesystem>
 #include "CoverCache.hpp"
+#include "IconSet.hpp"
 
 class UI {
     public:
@@ -31,10 +32,12 @@ class UI {
         static void onFolderChosen(void* userdata, const char* const* filelist, int filter);
         bool showSoundCloud{false};
         char soundCloudQuery[128] = "";
+        bool iconButton(const char* iconName, bool active = false);   // active = drawn in crimson
 
         std::mutex folderMutex;
         std::string chosenFolder;
 
         CoverCache covers;
+        IconSet icons;
 
 };

@@ -24,6 +24,10 @@ static float ButtonWidth(const char* label) {
     return ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2;
 }
 
+static float iconButtonWidth() {
+    return ImGui::GetFontSize() + ImGui::GetStyle().FramePadding.x * 2;
+}
+
 static std::string fitText(const std::string& text, float maximumWidth){
     if (ImGui::CalcTextSize(text.c_str()).x <= maximumWidth) return text;
     std::string looptext = text;
@@ -50,6 +54,98 @@ bool UI::takeChosenFolder(std::filesystem::path &out) {
     return true;
 }
 
+// turns a hex colour like 0xe01040 into the 0.0-1.0 floats ImGui uses
+static ImVec4 hexColor(unsigned int rgb, float alpha = 1.0f) {
+    float r = ((rgb >> 16) & 0xFF) / 255.0f;
+    float g = ((rgb >> 8) & 0xFF) / 255.0f;
+    float b = (rgb & 0xFF) / 255.0f;
+    return ImVec4(r, g, b, alpha);
+}
+
+// crimson theme, same palette as the waybar config
+namespace palette {
+    constexpr unsigned int base    = 0x0d0809;
+    constexpr unsigned int surface = 0x1b1114;
+    constexpr unsigned int overlay = 0x2a191d;
+    constexpr unsigned int muted   = 0x75595f;
+    constexpr unsigned int subtle  = 0xa8898f;
+    constexpr unsigned int text    = 0xefe1e3;
+    constexpr unsigned int crimson = 0xe01040;
+    constexpr unsigned int bright  = 0xfc0556;
+    constexpr unsigned int blood   = 0x8c0a26;
+}
+
+static void applyTheme() {
+    using namespace palette;
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    style.Colors[ImGuiCol_WindowBg]             = hexColor(base);
+    style.Colors[ImGuiCol_ChildBg]              = hexColor(base);
+    style.Colors[ImGuiCol_PopupBg]              = hexColor(surface);
+    style.Colors[ImGuiCol_Border]               = hexColor(blood, 0.8f);
+
+    style.Colors[ImGuiCol_Text]                 = hexColor(text);
+    style.Colors[ImGuiCol_TextDisabled]         = hexColor(subtle);
+    style.Colors[ImGuiCol_TextSelectedBg]       = hexColor(crimson, 0.35f);
+
+    style.Colors[ImGuiCol_FrameBg]              = hexColor(overlay);
+    style.Colors[ImGuiCol_FrameBgHovered]       = hexColor(crimson, 0.25f);
+    style.Colors[ImGuiCol_FrameBgActive]        = hexColor(crimson, 0.4f);
+
+    style.Colors[ImGuiCol_SliderGrab]           = hexColor(crimson);
+    style.Colors[ImGuiCol_SliderGrabActive]     = hexColor(bright);
+    style.Colors[ImGuiCol_CheckMark]            = hexColor(crimson);
+
+    style.Colors[ImGuiCol_Button]               = hexColor(surface);
+    style.Colors[ImGuiCol_ButtonHovered]        = hexColor(crimson, 0.25f);
+    style.Colors[ImGuiCol_ButtonActive]         = hexColor(crimson);
+
+    style.Colors[ImGuiCol_Header]               = hexColor(crimson, 0.4f);
+    style.Colors[ImGuiCol_HeaderHovered]        = hexColor(crimson, 0.25f);
+    style.Colors[ImGuiCol_HeaderActive]         = hexColor(crimson, 0.6f);
+
+    style.Colors[ImGuiCol_TitleBg]              = hexColor(surface);
+    style.Colors[ImGuiCol_TitleBgActive]        = hexColor(blood);
+    style.Colors[ImGuiCol_TitleBgCollapsed]     = hexColor(surface);
+
+    style.Colors[ImGuiCol_ScrollbarBg]          = hexColor(base);
+    style.Colors[ImGuiCol_ScrollbarGrab]        = hexColor(overlay);
+    style.Colors[ImGuiCol_ScrollbarGrabHovered] = hexColor(muted);
+    style.Colors[ImGuiCol_ScrollbarGrabActive]  = hexColor(crimson);
+
+    style.Colors[ImGuiCol_TableHeaderBg]        = hexColor(overlay);
+    style.Colors[ImGuiCol_TableBorderStrong]    = hexColor(blood, 0.8f);
+    style.Colors[ImGuiCol_TableBorderLight]     = hexColor(overlay);
+    style.Colors[ImGuiCol_TableRowBg]           = hexColor(base, 0.0f);
+    style.Colors[ImGuiCol_TableRowBgAlt]        = hexColor(surface, 0.5f);
+
+    style.Colors[ImGuiCol_Separator]            = hexColor(blood);
+    style.Colors[ImGuiCol_SeparatorHovered]     = hexColor(crimson, 0.6f);
+    style.Colors[ImGuiCol_SeparatorActive]      = hexColor(crimson);
+
+    style.Colors[ImGuiCol_ResizeGrip]           = hexColor(crimson, 0.2f);
+    style.Colors[ImGuiCol_ResizeGripHovered]    = hexColor(crimson, 0.6f);
+    style.Colors[ImGuiCol_ResizeGripActive]     = hexColor(bright);
+
+    style.Colors[ImGuiCol_NavCursor]            = hexColor(crimson);
+
+    // rounded corners, like the waybar
+    style.FrameRounding  = 6.0f;
+    style.GrabRounding   = 6.0f;
+    style.ChildRounding  = 6.0f;
+    style.PopupRounding  = 8.0f;
+    style.WindowRounding = 8.0f;
+}
+
+bool UI::iconButton(const char *iconName, bool active) {
+    SDL_Texture* tex = icons.get(iconName);
+    if (tex == nullptr) return ImGui::Button(iconName);
+    float size = ImGui::GetFontSize();
+    // white icons get multiplied by the tint: white stays white, crimson makes them crimson
+    ImVec4 tint = active ? hexColor(palette::crimson) : ImVec4(1, 1, 1, 1);
+    return ImGui::ImageButton(iconName, (ImTextureID)(intptr_t)tex, ImVec2(size, size), ImVec2(0,0), ImVec2(1,1), ImVec4(0,0,0,0), tint);
+}
+
 bool UI::init() {
     if (!SDL_Init(SDL_INIT_VIDEO)) {           // SDL3: returns true on success (SDL2 was the opposite!)
         std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n";
@@ -63,8 +159,9 @@ bool UI::init() {
         return false;
     }
     SDL_SetRenderVSync(renderer, 1);           // wait for the screen refresh, otherwise it runs at 100% CPU
-
+    icons.load(renderer, "assets/icons");
     ImGui::CreateContext();
+    applyTheme();
     auto fontAtlas = ImGui::GetIO().Fonts;
     ImFontConfig config;
     config.MergeMode = true;
@@ -162,7 +259,7 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
             else clicked = ImGui::Button("##cover", ImVec2(tile, tile));
             ImGui::PopStyleVar();
             if (i == library.currentIndex()) {
-                ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), IM_COL32(255,255,255,255), 0.0f, 0,3.0f);
+                ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), ImGui::GetColorU32(hexColor(palette::crimson)), 6.0f, 0, 3.0f);
             }
             ImGui::TextUnformatted(fitText(track.title, tile).c_str());
             ImGui::TextDisabled("%s", fitText(track.artist, tile).c_str());
@@ -182,31 +279,24 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
         const Track& playing = library.song(library.currentIndex());
         ImGui::Text("Now playing: %s - %s", playing.title.c_str(), playing.artist.c_str());
     }
-    if (ImGui::Button("Previous") && !library.empty()) {
+    if (iconButton("skip-back") && !library.empty()) {
         library.previous();
         player.play(library.currentSong());
     }
 
     ImGui::SameLine();
-    if (player.isPlaying()) {
-        if (ImGui::Button("Pause")) {
-            player.togglePause();
-        }
-    }
-    else {
-        if (ImGui::Button("Resume")) {
-            player.togglePause();
-        }
+    if (iconButton(player.isPlaying() ? "pause" : "play")) {
+        player.togglePause();
     }
 
     ImGui::SameLine();
-    if (ImGui::Button("Next") && !library.empty()) {
+    if (iconButton("skip-forward") && !library.empty()) {
         library.next();
         player.play(library.currentSong());
     }
 
     ImGui::SameLine();
-    float rightSide = ImGui::CalcTextSize("00:00 / 00:00").x + + 150 + ImGui::GetStyle().ItemSpacing.x * 3 + ButtonWidth("Repeat");
+    float rightSide = ImGui::CalcTextSize("00:00 / 00:00").x + 150 + ImGui::GetStyle().ItemSpacing.x * 4 + iconButtonWidth()*2;
     ImGui::SetNextItemWidth(-rightSide);
     float pos = player.position();
     if (ImGui::SliderFloat("##position", &pos, 0.0f, player.length(), "")) {
@@ -217,12 +307,23 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     splitTime(pos, posMin, posSec);
     splitTime(player.length(), lenMin, lenSec);
     ImGui::Text("%d:%02d / %d:%02d", posMin, posSec, lenMin, lenSec);
+    
+    RepeatMode repeatmode = library.repeatMode();
+    const char* repeatstr;
+    if (repeatmode == RepeatMode::Off) repeatstr = "repeat-off";
+    else if (repeatmode == RepeatMode::All) repeatstr = "repeat";
+    else if (repeatmode == RepeatMode::One) repeatstr = "repeat-1";
 
     ImGui::SameLine();
-    if (ImGui::Button("Repeat")) {
+    if (iconButton(repeatstr, repeatmode != RepeatMode::Off)) {
         if (library.repeatMode() == RepeatMode::All) library.setRepeatMode(RepeatMode::Off);
         else if (library.repeatMode() == RepeatMode::Off) library.setRepeatMode(RepeatMode::One);
         else if (library.repeatMode() == RepeatMode::One) library.setRepeatMode(RepeatMode::All);
+    }
+
+    ImGui::SameLine();
+    if (iconButton("shuffle", library.shuffled())) {
+        library.setShuffle(!library.shuffled());
     }
 
     ImGui::SameLine();
@@ -296,13 +397,14 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     }
 
     ImGui::Render();
-    SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
+    SDL_SetRenderDrawColor(renderer, 0x0d, 0x08, 0x09, 255);
     SDL_RenderClear(renderer);
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
     SDL_RenderPresent(renderer);
 }
 
 UI::~UI() {
+    icons.clear();
     covers.clear();
     if (imguiReady) {
         ImGui_ImplSDLRenderer3_Shutdown();
