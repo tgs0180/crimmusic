@@ -15,6 +15,8 @@
 #include "StringUtils.hpp"
 #include <string>
 #include <cstdlib>
+#include <cstdio>
+#include <vector>
 #include <fstream>
 #include <sstream>
 
@@ -373,6 +375,10 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
         if (ImGui::MenuItem("Make lyrics")) {
             showMakeLyrics = true;
         }
+        if (ImGui::MenuItem("Edit lyrics", nullptr, false, !library.empty())) {
+            loadEditLyrics(library.currentSong());
+            showEditLyrics = true;
+        }
         ImGui::Separator();
         if (ImGui::MenuItem("Quit")) quit = true;
         
@@ -592,6 +598,10 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
         drawMakeLyrics(library);
     }
 
+    if (showEditLyrics) {
+        drawEditLyrics(player, library);
+    }
+
     if (showSoundCloud) {
         ImGui::SetNextWindowSize(ImVec2(700, 400), ImGuiCond_Appearing);
         ImGui::Begin("SoundCloud", &showSoundCloud);
@@ -675,6 +685,24 @@ UI::~UI() {
     if (sdlReady) SDL_Quit();
 }
 
+static void placeNextWindow(float width, float height) {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImVec2 maxSize(std::max(200.0f, viewport->WorkSize.x - 20.0f), std::max(150.0f, viewport->WorkSize.y - 20.0f));
+    ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(std::min(width, maxSize.x), std::min(height, maxSize.y)), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(200.0f, 150.0f), maxSize);
+}
+
+static void keepWindowInside() {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImVec2 pos = ImGui::GetWindowPos();
+    ImVec2 size = ImGui::GetWindowSize();
+    ImVec2 min = viewport->WorkPos;
+    ImVec2 max(viewport->WorkPos.x + viewport->WorkSize.x - size.x, viewport->WorkPos.y + viewport->WorkSize.y - size.y);
+    ImVec2 clamped(std::clamp(pos.x, min.x, std::max(min.x, max.x)), std::clamp(pos.y, min.y, std::max(min.y, max.y)));
+    if (clamped.x != pos.x || clamped.y != pos.y) ImGui::SetWindowPos(clamped);
+}
+
 void UI::onMp3Chosen(void *userdata, const char *const *filelist, int filter) {
     if (filelist == nullptr || filelist[0] == nullptr) return;
     UI* ui = static_cast<UI*>(userdata);
@@ -733,11 +761,12 @@ void UI::drawMakeLyrics(Library &library) {
         }
     }
 
-    ImGui::SetNextWindowSize(ImVec2(640, 620), ImGuiCond_Appearing);
+    placeNextWindow(640, 620);
     if (!ImGui::Begin("Make lyrics", &showMakeLyrics)) {
         ImGui::End();
         return;
     }
+    keepWindowInside();
 
     static const SDL_DialogFileFilter mp3Filter[] = { { "MP3 audio", "mp3" } };
     static const SDL_DialogFileFilter txtFilter[] = { { "Text files", "txt;lrc" }, { "All files", "*" } };
@@ -821,6 +850,227 @@ void UI::drawMakeLyrics(Library &library) {
     if (!makeStatus.empty()) {
         ImGui::SameLine();
         ImGui::TextDisabled("%s", makeStatus.c_str());
+    }
+
+    ImGui::End();
+}
+
+static bool parseLrcTime(const char* text, float& seconds) {
+    int minutes = 0;
+    float secs = 0.0f;
+    char extra = 0;
+    if (std::sscanf(text, " %d:%f %c", &minutes, &secs, &extra) != 2) return false;
+    if (minutes < 0 || secs < 0.0f || secs >= 60.0f) return false;
+    seconds = minutes * 60.0f + secs;
+    return true;
+}
+
+static void formatLrcTime(float seconds, char* out, std::size_t size) {
+    if (seconds < 0.0f) seconds = 0.0f;
+    int minutes = static_cast<int>(seconds / 60.0f);
+    std::snprintf(out, size, "%02d:%05.2f", minutes, seconds - minutes * 60.0f);
+}
+
+void UI::loadEditLyrics(const std::filesystem::path &song) {
+    editSong = song;
+    editHeader.clear();
+    editRows.clear();
+    editDirty = false;
+    editStatus.clear();
+
+    std::filesystem::path lrc = song;
+    lrc.replace_extension(".lrc");
+    std::ifstream file(lrc);
+    if (!file) {
+        editStatus = "This song has no lyrics yet. Add lines below.";
+        editRows.push_back(EditRow{});
+        formatLrcTime(0.0f, editRows.back().time, sizeof(EditRow::time));
+        return;
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        std::vector<float> times;
+        std::size_t pos = 0;
+        while (pos < line.size() && line[pos] == '[') {
+            std::size_t close = line.find(']', pos);
+            if (close == std::string::npos) break;
+            float seconds;
+            if (!parseLrcTime(line.substr(pos + 1, close - pos - 1).c_str(), seconds)) break;
+            times.push_back(seconds);
+            pos = close + 1;
+        }
+        if (times.empty()) {
+            if (line.size() > 2 && line.front() == '[' && line.back() == ']') editHeader.push_back(line);
+            continue;
+        }
+        std::string text = line.substr(pos);
+        std::size_t start = text.find_first_not_of(' ');
+        text = start == std::string::npos ? "" : text.substr(start);
+        for (float seconds : times) {
+            EditRow row;
+            formatLrcTime(seconds, row.time, sizeof(row.time));
+            std::snprintf(row.text, sizeof(row.text), "%s", text.c_str());
+            editRows.push_back(row);
+        }
+    }
+    std::stable_sort(editRows.begin(), editRows.end(), [](const EditRow& a, const EditRow& b) {
+        float ta = 0.0f, tb = 0.0f;
+        parseLrcTime(a.time, ta);
+        parseLrcTime(b.time, tb);
+        return ta < tb;
+    });
+}
+
+bool UI::saveEditLyrics() {
+    std::vector<std::pair<float, std::string>> lines;
+    for (const EditRow& row : editRows) {
+        float seconds;
+        if (!parseLrcTime(row.time, seconds)) {
+            editStatus = "Fix the red times first (use mm:ss.xx, for example 01:23.45).";
+            return false;
+        }
+        lines.push_back({seconds, row.text});
+    }
+    std::stable_sort(lines.begin(), lines.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+
+    std::filesystem::path target = editSong;
+    target.replace_extension(".lrc");
+    std::error_code error;
+    if (std::filesystem::exists(target, error)) {
+        const char* home = std::getenv("HOME");
+        std::filesystem::path backup = std::filesystem::path(home ? home : ".") / ".cache" / "crimmusic" / "lrc-backup" / "edits";
+        std::filesystem::create_directories(backup, error);
+        std::filesystem::copy_file(target, backup / target.filename(), std::filesystem::copy_options::overwrite_existing, error);
+    }
+
+    std::ofstream out(target);
+    if (!out) {
+        editStatus = "Could not write " + target.filename().string();
+        return false;
+    }
+    bool wroteSource = false;
+    for (const std::string& header : editHeader) {
+        if (header.rfind("[source:", 0) == 0) {
+            out << "[source:manual edit]\n";
+            wroteSource = true;
+        }
+        else {
+            out << header << "\n";
+        }
+    }
+    if (!wroteSource) out << "[source:manual edit]\n";
+    for (const auto& line : lines) {
+        char time[16];
+        formatLrcTime(line.first, time, sizeof(time));
+        out << "[" << time << "] " << line.second << "\n";
+    }
+    out.close();
+
+    lyrics.forget(editSong);
+    loadEditLyrics(editSong);
+    editStatus = "Saved " + target.filename().string();
+    return true;
+}
+
+void UI::drawEditLyrics(Player &player, Library &library) {
+    placeNextWindow(720, 640);
+    if (!ImGui::Begin("Edit lyrics", &showEditLyrics)) {
+        ImGui::End();
+        return;
+    }
+    keepWindowInside();
+
+    ImGui::TextWrapped("%s", editSong.filename().string().c_str());
+    bool isCurrent = !library.empty() && library.currentSong() == editSong;
+    if (!isCurrent && !library.empty()) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Switch to current song")) {
+            loadEditLyrics(library.currentSong());
+            isCurrent = true;
+        }
+    }
+    ImGui::TextDisabled("Times are mm:ss.xx. \"now\" sets a line to the current playback position.");
+
+    float position = player.position();
+    int playingRow = -1;
+    if (isCurrent) {
+        for (std::size_t i = 0; i < editRows.size(); i++) {
+            float seconds;
+            if (parseLrcTime(editRows[i].time, seconds) && seconds <= position) playingRow = static_cast<int>(i);
+        }
+    }
+
+    float footer = ImGui::GetFrameHeightWithSpacing() * 2 + ImGui::GetStyle().ItemSpacing.y;
+    ImGui::BeginChild("editrows", ImVec2(0, -footer), ImGuiChildFlags_Borders);
+    int removeRow = -1;
+    if (ImGui::BeginTable("editlyrics", 4, ImGuiTableFlags_SizingFixedFit)) {
+        ImGui::TableSetupColumn("time", ImGuiTableColumnFlags_WidthFixed, ImGui::CalcTextSize("000:00.000").x + ImGui::GetStyle().FramePadding.x * 2);
+        ImGui::TableSetupColumn("text", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("now", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("remove", ImGuiTableColumnFlags_WidthFixed);
+        for (std::size_t i = 0; i < editRows.size(); i++) {
+            EditRow& row = editRows[i];
+            ImGui::PushID(static_cast<int>(i));
+            ImGui::TableNextRow();
+            if (static_cast<int>(i) == playingRow) {
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(hexColor(palette::crimson, 0.25f)));
+            }
+
+            ImGui::TableNextColumn();
+            float seconds;
+            bool valid = parseLrcTime(row.time, seconds);
+            if (!valid) ImGui::PushStyleColor(ImGuiCol_FrameBg, hexColor(palette::blood));
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::InputText("##time", row.time, sizeof(row.time))) editDirty = true;
+            if (!valid) ImGui::PopStyleColor();
+
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::InputText("##text", row.text, sizeof(row.text))) editDirty = true;
+
+            ImGui::TableNextColumn();
+            ImGui::BeginDisabled(!isCurrent);
+            if (ImGui::SmallButton("now")) {
+                formatLrcTime(position, row.time, sizeof(row.time));
+                editDirty = true;
+            }
+            ImGui::EndDisabled();
+
+            ImGui::TableNextColumn();
+            if (ImGui::SmallButton("x")) removeRow = static_cast<int>(i);
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+    ImGui::EndChild();
+
+    if (removeRow >= 0) {
+        editRows.erase(editRows.begin() + removeRow);
+        editDirty = true;
+    }
+
+    if (ImGui::Button("+ Add line")) {
+        EditRow row;
+        float last = 0.0f;
+        if (!editRows.empty()) parseLrcTime(editRows.back().time, last);
+        formatLrcTime(isCurrent ? std::max(position, last) : last + 2.0f, row.time, sizeof(row.time));
+        editRows.push_back(row);
+        editDirty = true;
+    }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!editDirty);
+    if (ImGui::Button("Save")) saveEditLyrics();
+    ImGui::SameLine();
+    if (ImGui::Button("Undo changes")) loadEditLyrics(editSong);
+    ImGui::EndDisabled();
+    if (editDirty) {
+        ImGui::SameLine();
+        ImGui::TextColored(hexColor(palette::bright), "unsaved changes");
+    }
+    if (!editStatus.empty()) {
+        ImGui::TextDisabled("%s", editStatus.c_str());
     }
 
     ImGui::End();

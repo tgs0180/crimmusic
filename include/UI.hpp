@@ -71,4 +71,18 @@ class UI {
         std::string pendingTxt;
         std::string dialogLocation;
         std::string makeStatus;
+
+        struct EditRow {
+            char time[16] = "";
+            char text[512] = "";
+        };
+        void loadEditLyrics(const std::filesystem::path& song);
+        bool saveEditLyrics();
+        void drawEditLyrics(Player& player, Library& library);
+        bool showEditLyrics{false};
+        std::filesystem::path editSong;
+        std::vector<std::string> editHeader;
+        std::vector<EditRow> editRows;
+        bool editDirty{false};
+        std::string editStatus;
 };
