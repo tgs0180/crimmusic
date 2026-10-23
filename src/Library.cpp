@@ -6,7 +6,6 @@
 #include <taglib/fileref.h>
 #include <taglib/tag.h>
 
-// reads title and artist from the file's tags, with fallbacks if they're missing
 static Track readTrack(const std::filesystem::path& file) {
     Track track;
     track.file = file;
@@ -35,7 +34,6 @@ bool Library::scan(const std::filesystem::path& root) {
     }
     if (waitlist.empty()) return false;
 
-    // remember which song was current, so a rescan doesn't lose our place
     std::filesystem::path previous;
     if (!songs.empty()) previous = songs[current].file;
 
@@ -50,7 +48,6 @@ bool Library::scan(const std::filesystem::path& root) {
             break;
         }
     }
-    // the number of songs may have changed, so the old shuffled order is no longer valid
     if (shuffle) buildOrder();
     return true;
 }
@@ -77,7 +74,6 @@ const std::filesystem::path& Library::currentSong() const {
 
 void Library::setCurrent(std::size_t index) {
     current = index;
-    // start a fresh shuffled order from the song that was picked
     if (shuffle) buildOrder();
 }
 

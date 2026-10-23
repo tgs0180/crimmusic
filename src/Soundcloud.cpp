@@ -126,8 +126,8 @@ void SoundCloud::startDownload(const RemoteTrack &track) {
         bool found = false;
         for (Download& download : shared.downloads) {
             if (download.track.id == track.id) {
-                if (download.state != DownloadState::Failed) return;   // already downloading or done
-                download.state = DownloadState::Downloading;            // retry after a failure
+                if (download.state != DownloadState::Failed) return;
+                download.state = DownloadState::Downloading;
                 found = true;
                 break;
             }

@@ -9,7 +9,7 @@
 #include <SDL3/SDL.h>
 
 
-bool CoverCache::loadCover(const std::filesystem::path &file, std::vector<unsigned char> &out) {
+bool CoverCache::loadCover(const std::filesystem::path &file, int size, std::vector<unsigned char> &out) {
     TagLib::MPEG::File mp3(file.c_str());
     auto* id3 = mp3.ID3v2Tag();
     if (id3 == nullptr) return false;
@@ -25,14 +25,18 @@ bool CoverCache::loadCover(const std::filesystem::path &file, std::vector<unsign
     &width, &height, &channels,                     
     4);         
     if (pixels == nullptr) return false;
-    out.resize(coverSize * coverSize * 4);
-    stbir_resize_uint8_srgb(pixels, width, height, 0, out.data(), coverSize, coverSize, 0, STBIR_RGBA);
+    out.resize(size * size * 4);
+    stbir_resize_uint8_srgb(pixels, width, height, 0, out.data(), size, size, 0, STBIR_RGBA);
     stbi_image_free(pixels);
     return true;
 }
 
-CoverCache::CoverCache() {
+CoverCache::CoverCache(int size) : coverSize(size) {
     thread = std::thread(&CoverCache::worker, this);
+}
+
+int CoverCache::size() const {
+    return coverSize;
 }
 
 void CoverCache::worker() {
@@ -46,7 +50,7 @@ void CoverCache::worker() {
         todo.pop_front();
     }
         std::vector<unsigned char> rgba;
-        bool ok = loadCover(file, rgba);
+        bool ok = loadCover(file, coverSize, rgba);
         if (!ok) rgba.clear();
     {
         std::lock_guard<std::mutex> lock(mutex);

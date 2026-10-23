@@ -51,6 +51,6 @@ class SoundCloud {
         void downloadWorker(RemoteTrack track, std::filesystem::path folder);
         std::vector<std::thread> downloadThreads;
         std::filesystem::path downloadFolder;
-        bool downloadFinished = false;   // guarded by mutex, set by download workers
+        bool downloadFinished = false;
 
     };

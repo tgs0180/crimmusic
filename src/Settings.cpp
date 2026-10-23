@@ -40,7 +40,6 @@ void Settings::load() {
                 volume = std::stof(value);
             }
             catch (const std::exception&) {
-                // bad value in the file, keep the default
             }
         }
     }

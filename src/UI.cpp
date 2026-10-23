@@ -8,6 +8,7 @@
 #include "imgui_impl_sdlrenderer3.h"
 #include <SDL3/SDL_dialog.h>
 #include <SDL3/SDL_render.h>
+#include <algorithm>
 #include <cstdint>
 #include <iostream>
 #include <cstddef>
@@ -54,7 +55,6 @@ bool UI::takeChosenFolder(std::filesystem::path &out) {
     return true;
 }
 
-// turns a hex colour like 0xe01040 into the 0.0-1.0 floats ImGui uses
 static ImVec4 hexColor(unsigned int rgb, float alpha = 1.0f) {
     float r = ((rgb >> 16) & 0xFF) / 255.0f;
     float g = ((rgb >> 8) & 0xFF) / 255.0f;
@@ -62,7 +62,6 @@ static ImVec4 hexColor(unsigned int rgb, float alpha = 1.0f) {
     return ImVec4(r, g, b, alpha);
 }
 
-// crimson theme, same palette as the waybar config
 namespace palette {
     constexpr unsigned int base    = 0x0d0809;
     constexpr unsigned int surface = 0x1b1114;
@@ -129,7 +128,6 @@ static void applyTheme() {
 
     style.Colors[ImGuiCol_NavCursor]            = hexColor(crimson);
 
-    // rounded corners, like the waybar
     style.FrameRounding  = 6.0f;
     style.GrabRounding   = 6.0f;
     style.ChildRounding  = 6.0f;
@@ -137,17 +135,16 @@ static void applyTheme() {
     style.WindowRounding = 8.0f;
 }
 
-bool UI::iconButton(const char *iconName, bool active) {
+bool UI::iconButton(const char *iconName, bool active, float size) {
     SDL_Texture* tex = icons.get(iconName);
     if (tex == nullptr) return ImGui::Button(iconName);
-    float size = ImGui::GetFontSize();
-    // white icons get multiplied by the tint: white stays white, crimson makes them crimson
+    if (size == 0.0f) size = ImGui::GetFontSize();
     ImVec4 tint = active ? hexColor(palette::crimson) : ImVec4(1, 1, 1, 1);
     return ImGui::ImageButton(iconName, (ImTextureID)(intptr_t)tex, ImVec2(size, size), ImVec2(0,0), ImVec2(1,1), ImVec4(0,0,0,0), tint);
 }
 
 bool UI::init() {
-    if (!SDL_Init(SDL_INIT_VIDEO)) {           // SDL3: returns true on success (SDL2 was the opposite!)
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
         std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n";
         return false;
     }
@@ -158,7 +155,7 @@ bool UI::init() {
         std::cerr << "Failed to create window: " << SDL_GetError() << "\n";
         return false;
     }
-    SDL_SetRenderVSync(renderer, 1);           // wait for the screen refresh, otherwise it runs at 100% CPU
+    SDL_SetRenderVSync(renderer, 1);
     icons.load(renderer, "assets/icons");
     ImGui::CreateContext();
     applyTheme();
@@ -188,9 +185,115 @@ bool UI::processEvents() {
     }
     return true;
 }
-// ! decides what gets drawn.
+
+void UI::drawPlayPause(Player & player, float iconSize){
+    if (iconButton(player.isPlaying() ? "pause" : "play", false, iconSize)) {
+        player.togglePause();
+    }
+}
+
+void UI::drawQueue(Player &player, Library &lib, float iconSize) {
+    if (iconButton("list-video", false, iconSize)) {
+        ImGui::OpenPopup("queue");
+    }
+    ImGui::SetItemTooltip("Queue");
+    ImGui::SetNextWindowPos(ImGui::GetItemRectMin(), ImGuiCond_Appearing, ImVec2(0.5f, 1.0f));
+    if (ImGui::BeginPopup("queue")) {
+        ImGui::TextDisabled("Up next");
+        ImGui::Separator();
+        ImGui::BeginChild("Queuelist", ImVec2(500, 400));
+        std::vector<std::size_t> next = lib.upcoming(lib.size());
+        if (next.empty()) ImGui::Text("It's quiet in here...");
+        else {
+            float rowHeight = ImGui::GetTextLineHeightWithSpacing() * 2;
+            float coverSize = 32.0f;
+            ImGuiListClipper clipper;
+            clipper.Begin(static_cast<int>(next.size()));
+            while (clipper.Step()) {
+            for (int k = clipper.DisplayStart; k < clipper.DisplayEnd; k++) {
+                const Track& t = lib.song(next[static_cast<std::size_t>(k)]);
+                ImGui::PushID(k);
+                ImVec2 start = ImGui::GetCursorPos();
+                bool clicked = ImGui::Selectable("##row", false, 0, ImVec2(0, rowHeight));
+                ImGui::SetCursorPos(start);
+                covers.request(t.file);
+                SDL_Texture* tex = covers.get(t.file);
+                if (tex) {
+                    ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(coverSize, coverSize));
+                }
+                else {
+                    ImGui::Dummy(ImVec2(coverSize, coverSize));
+                }
+                ImGui::SameLine();
+                ImGui::BeginGroup();
+                auto textwidth = ImGui::GetContentRegionAvail().x;
+                ImGui::TextUnformatted(fitText(t.title, textwidth).c_str());
+                ImGui::TextDisabled("%s", fitText(t.artist, textwidth).c_str());
+                ImGui::EndGroup();
+                if (clicked) {
+                    int x = k + 1;
+                    while(x != 0) {
+                        lib.next();
+                        x -= 1;
+                    }
+                    player.play(lib.currentSong());
+                }
+                ImGui::PopID();
+            }
+            }
+        }
+        ImGui::EndChild();
+        ImGui::EndPopup();
+    }
+}
+
+void UI::drawRepeat(Library &lib, float iconSize) {
+    RepeatMode repeatmode = lib.repeatMode();
+    const char* repeatstr;
+    if (repeatmode == RepeatMode::Off) repeatstr = "repeat-off";
+    else if (repeatmode == RepeatMode::All) repeatstr = "repeat";
+    else if (repeatmode == RepeatMode::One) repeatstr = "repeat-1";
+
+    if (iconButton(repeatstr, repeatmode != RepeatMode::Off, iconSize)) {
+        if (lib.repeatMode() == RepeatMode::All) lib.setRepeatMode(RepeatMode::Off);
+        else if (lib.repeatMode() == RepeatMode::Off) lib.setRepeatMode(RepeatMode::One);
+        else if (lib.repeatMode() == RepeatMode::One) lib.setRepeatMode(RepeatMode::All);
+    }
+}
+
+void UI::drawShuffle(Library &lib, float iconSize) {
+    if (iconButton("shuffle", lib.shuffled(), iconSize)) {
+        lib.setShuffle(!lib.shuffled());
+    }
+}
+
+void UI::drawTimeSlider(Player &player, float width) {
+    float sliderY = ImGui::GetCursorPosY();
+    ImGui::SetNextItemWidth(width);
+    float pos = player.position();
+    if (ImGui::SliderFloat("##position", &pos, 0.0f, player.length(), "")) {
+        player.seek(pos);
+    }
+    ImGui::SameLine();
+    ImGui::SetCursorPosY(sliderY);
+    ImGui::AlignTextToFramePadding();
+    int posMin, posSec, lenMin, lenSec;
+    splitTime(pos, posMin, posSec);
+    splitTime(player.length(), lenMin, lenSec);
+    ImGui::Text("%d:%02d / %d:%02d", posMin, posSec, lenMin, lenSec);
+}
+
+void UI::drawVolume(Player &player, float width) {
+    ImGui::SetNextItemWidth(width);
+    float vol = player.volume() * 100;
+    if (ImGui::SliderFloat("##volume", &vol, 0.0f, 100.0f, "%.0f%%")) {
+        player.setVolume(vol/100.0f);
+    }
+}
+
 void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     covers.update(renderer);
+    bigCovers.update(renderer);
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
@@ -199,7 +302,7 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     ImGui::SetNextWindowPos(viewport->WorkPos);
     ImGui::SetNextWindowSize(viewport->WorkSize);
 
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings / ImGuiWindowFlags_NoBringToFrontOnFocus;
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus;
     ImGui::Begin("crimmusic", nullptr, flags);
 
     if (ImGui::Button("≡##menu")) {
@@ -238,7 +341,7 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     }
 
     ImGui::BeginChild("songlist", ImVec2(0, -bottomBarHeight), ImGuiChildFlags_Borders);
-        float tile = CoverCache::coverSize;
+        float tile = static_cast<float>(covers.size());
         float spacing = ImGui::GetStyle().ItemSpacing.x;
         float available = ImGui::GetContentRegionAvail().x;
         int columns = std::max(1, static_cast<int>((available + spacing) / (tile + spacing)));
@@ -279,7 +382,7 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
         const Track& playing = library.song(library.currentIndex());
         ImGui::Text("Now playing: %s - %s", playing.title.c_str(), playing.artist.c_str());
         if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-        if (ImGui::IsItemClicked()) {NowPlayingOpen = true; JustOpened = true;;}
+        if (ImGui::IsItemClicked()) {NowPlayingTarget = true; JustOpened = true;}
     }
     if (iconButton("skip-back") && !library.empty()) {
         library.previous();
@@ -287,9 +390,7 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     }
 
     ImGui::SameLine();
-    if (iconButton(player.isPlaying() ? "pause" : "play")) {
-        player.togglePause();
-    }
+    drawPlayPause(player);
 
     ImGui::SameLine();
     if (iconButton("skip-forward") && !library.empty()) {
@@ -299,112 +400,131 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
 
     ImGui::SameLine();
     float rightSide = ImGui::CalcTextSize("00:00 / 00:00").x + 150 + ImGui::GetStyle().ItemSpacing.x * 5 + iconButtonWidth()*3;
-    ImGui::SetNextItemWidth(-rightSide);
-    float pos = player.position();
-    if (ImGui::SliderFloat("##position", &pos, 0.0f, player.length(), "")) {
-        player.seek(pos);
-    }
-    ImGui::SameLine();
-    int posMin, posSec, lenMin, lenSec;
-    splitTime(pos, posMin, posSec);
-    splitTime(player.length(), lenMin, lenSec);
-    ImGui::Text("%d:%02d / %d:%02d", posMin, posSec, lenMin, lenSec);
+    drawTimeSlider(player, -rightSide);
     
-    RepeatMode repeatmode = library.repeatMode();
-    const char* repeatstr;
-    if (repeatmode == RepeatMode::Off) repeatstr = "repeat-off";
-    else if (repeatmode == RepeatMode::All) repeatstr = "repeat";
-    else if (repeatmode == RepeatMode::One) repeatstr = "repeat-1";
+    ImGui::SameLine();
+    drawRepeat(library);
 
     ImGui::SameLine();
-    if (iconButton(repeatstr, repeatmode != RepeatMode::Off)) {
-        if (library.repeatMode() == RepeatMode::All) library.setRepeatMode(RepeatMode::Off);
-        else if (library.repeatMode() == RepeatMode::Off) library.setRepeatMode(RepeatMode::One);
-        else if (library.repeatMode() == RepeatMode::One) library.setRepeatMode(RepeatMode::All);
-    }
+    drawShuffle(library);
 
     ImGui::SameLine();
-    if (iconButton("shuffle", library.shuffled())) {
-        library.setShuffle(!library.shuffled());
-    }
+    drawQueue(player, library);
+    
 
     ImGui::SameLine();
-    if (iconButton("list-video")) {
-        ImGui::OpenPopup("queue");
-    }
-    ImGui::SetItemTooltip("Queue");
-    ImGui::SetNextWindowPos(ImGui::GetItemRectMin(), ImGuiCond_Appearing, ImVec2(0.5f, 1.0f));
-    if (ImGui::BeginPopup("queue")) {
-        ImGui::TextDisabled("Up next");
-        ImGui::Separator();
-        ImGui::BeginChild("Queuelist", ImVec2(500, 400));
-        std::vector<std::size_t> next = library.upcoming(library.size());
-        if (next.empty()) ImGui::Text("It's quiet in here...");
-        else {
-            float rowHeight = ImGui::GetTextLineHeightWithSpacing() * 2;
-            float coverSize = 32.0f;
-            // the clipper only hands out the rows that are actually visible in the scroll area
-            ImGuiListClipper clipper;
-            clipper.Begin(static_cast<int>(next.size()));
-            while (clipper.Step()) {
-            for (int k = clipper.DisplayStart; k < clipper.DisplayEnd; k++) {
-                const Track& t = library.song(next[static_cast<std::size_t>(k)]);
-                ImGui::PushID(k);
-                ImVec2 start = ImGui::GetCursorPos();
-                bool clicked = ImGui::Selectable("##row", false, 0, ImVec2(0, rowHeight));
-                ImGui::SetCursorPos(start);
-                covers.request(t.file);
-                SDL_Texture* tex = covers.get(t.file);
-                if (tex) {
-                    ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(coverSize, coverSize));
-                }
-                else {
-                    ImGui::Dummy(ImVec2(coverSize, coverSize));
-                }
-                ImGui::SameLine();
-                ImGui::BeginGroup();
-                auto textwidth = ImGui::GetContentRegionAvail().x;
-                ImGui::TextUnformatted(fitText(t.title, textwidth).c_str());
-                ImGui::TextDisabled("%s", fitText(t.artist, textwidth).c_str());
-                ImGui::EndGroup();
-                if (clicked) {
-                    int x = k + 1;
-                    while(x != 0) {
-                        library.next();
-                        x -= 1;
-                    }
-                    player.play(library.currentSong());
-                }
-                ImGui::PopID();
-            }
-            }
-        }
-        ImGui::EndChild();
-        ImGui::EndPopup();
-    }
-
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(150);
-    float vol = player.volume() * 100;
-    if (ImGui::SliderFloat("##volume", &vol, 0.0f, 100.0f, "%.0f%%")) {
-        player.setVolume(vol/100.0f);
-    }
+    drawVolume(player, 150);
     
     ImGui::End();
 
-    if (NowPlayingOpen) {
+    float step = ImGui::GetIO().DeltaTime / 0.25f;
+    nowPlayingSlide += NowPlayingTarget ? step : -step;
+    nowPlayingSlide = std::clamp(nowPlayingSlide, 0.0f, 1.0f);
+
+    if (nowPlayingSlide > 0.0f) {
         if (JustOpened) {
             ImGui::SetNextWindowFocus();
             JustOpened = false;
         }
-        ImGui::SetNextWindowPos(viewport->WorkPos);
+        float t = 1.0f - nowPlayingSlide;
+        float eased = 1.0f - t * t * t;
+        float offset = (1.0f - eased) * viewport->WorkSize.y;
+        ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x, viewport->WorkPos.y + offset));
         ImGui::SetNextWindowSize(viewport->WorkSize);
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
-
         ImGui::Begin("nowplaying", nullptr, flags);
 
-        if (ImGui::Button("X")) NowPlayingOpen = false;
-        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) NowPlayingOpen = false;
+        const ImGuiStyle& style = ImGui::GetStyle();
+        float left = ImGui::GetCursorPosX();
+        float width = ImGui::GetContentRegionAvail().x;
+        auto centerX = [&](float itemWidth) { ImGui::SetCursorPosX(left + (width - itemWidth) / 2.0f); };
+
+        if (ImGui::Button("X")) NowPlayingTarget = false;
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) NowPlayingTarget = false;
+
+        if (library.empty()) {
+            ImGui::Text("Nothing is playing");
+        }
+        else {
+            const Track& t = library.song(library.currentIndex());
+
+            float closeButtonRoom = (ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x) * 2;
+            std::string title = fitText(t.title, width - closeButtonRoom);
+            std::string artist = fitText(t.artist, width - closeButtonRoom);
+            ImGui::SameLine();
+            centerX(ImGui::CalcTextSize(title.c_str()).x);
+            ImGui::TextUnformatted(title.c_str());
+            centerX(ImGui::CalcTextSize(artist.c_str()).x);
+            ImGui::TextDisabled("%s", artist.c_str());
+
+            float height = ImGui::GetContentRegionAvail().y;
+
+            const float bigIcon = 48.0f;
+            const float smallIcon = 32.0f;
+            float row1Height = bigIcon + style.FramePadding.y * 2;
+            float row2Height = smallIcon + style.FramePadding.y * 2;
+
+            float gap = 20.0f;
+            float reserved = gap + gap + row1Height + style.ItemSpacing.y + row2Height + gap;
+            float coverSize = std::max(64.0f, std::min(width * 0.6f, height - reserved));
+
+            float stackHeight = reserved - gap + coverSize;
+            ImGui::Dummy(ImVec2(0, std::max(0.0f, (height - stackHeight) / 2.0f)));
+
+            ImGui::Dummy(ImVec2(0, gap));
+            centerX(coverSize);
+            bigCovers.request(library.currentSong());
+            SDL_Texture* tex = bigCovers.get(library.currentSong());
+            if (tex) ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(coverSize, coverSize));
+            else ImGui::Dummy(ImVec2(coverSize, coverSize));
+            ImGui::Dummy(ImVec2(0, gap));
+
+            float rowTop = ImGui::GetCursorPosY();
+            float bigButtonWidth = bigIcon + style.FramePadding.x * 2;
+            float margin = width * 0.08f;
+
+            ImGui::SetCursorPosX(left + margin);
+            if (iconButton("skip-back", false, bigIcon)) {
+                library.previous();
+                player.play(library.currentSong());
+            }
+
+            float timeTextWidth = ImGui::CalcTextSize("00:00 / 00:00").x;
+            float sliderWidth = width - 2 * (margin + bigButtonWidth + style.ItemSpacing.x * 2) - timeTextWidth - style.ItemSpacing.x;
+            sliderWidth = std::max(50.0f, sliderWidth);
+            float blockWidth = sliderWidth + style.ItemSpacing.x + timeTextWidth;
+            ImGui::SameLine();
+            centerX(blockWidth);
+            ImGui::SetCursorPosY(rowTop + (row1Height - ImGui::GetFrameHeight()) / 2.0f);
+            drawTimeSlider(player, sliderWidth);
+
+            ImGui::SameLine();
+            ImGui::SetCursorPos(ImVec2(left + width - margin - bigButtonWidth, rowTop));
+            if (iconButton("skip-forward", false, bigIcon)) {
+                library.next();
+                player.play(library.currentSong());
+            }
+
+            float row2Top = rowTop + row1Height + style.ItemSpacing.y;
+            float smallButtonWidth = smallIcon + style.FramePadding.x * 2;
+
+            ImGui::SetCursorPos(ImVec2(left + margin, row2Top));
+            drawPlayPause(player, smallIcon);
+            ImGui::SameLine();
+            drawRepeat(library, smallIcon);
+            ImGui::SameLine();
+            drawShuffle(library, smallIcon);
+
+            float quarter = width / 4.0f;
+            float volumeWidth = std::max(60.0f, std::min(150.0f, quarter - margin - smallButtonWidth - style.ItemSpacing.x));
+            float rightGroupWidth = smallButtonWidth + style.ItemSpacing.x + volumeWidth;
+            ImGui::SameLine();
+            ImGui::SetCursorPos(ImVec2(left + width - margin - rightGroupWidth, row2Top));
+            drawQueue(player, library, smallIcon);
+            ImGui::SameLine();
+            ImGui::SetCursorPosY(row2Top + (row2Height - ImGui::GetFrameHeight()) / 2.0f);
+            drawVolume(player, volumeWidth);
+        }
 
         ImGui::End();
     }
@@ -480,6 +600,7 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
 UI::~UI() {
     icons.clear();
     covers.clear();
+    bigCovers.clear();
     if (imguiReady) {
         ImGui_ImplSDLRenderer3_Shutdown();
         ImGui_ImplSDL3_Shutdown();
