@@ -21,6 +21,8 @@ class UI {
         bool processEvents();
         void draw(Player& player, Library& library, SoundCloud& soundcloud);
         bool takeChosenFolder(std::filesystem::path& out);
+        bool NowPlayingOpen = false;
+        bool JustOpened{false};
         
     private:
         SDL_Window* window = nullptr;

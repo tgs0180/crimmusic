@@ -199,7 +199,7 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     ImGui::SetNextWindowPos(viewport->WorkPos);
     ImGui::SetNextWindowSize(viewport->WorkSize);
 
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings / ImGuiWindowFlags_NoBringToFrontOnFocus;
     ImGui::Begin("crimmusic", nullptr, flags);
 
     if (ImGui::Button("≡##menu")) {
@@ -278,6 +278,8 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     else {
         const Track& playing = library.song(library.currentIndex());
         ImGui::Text("Now playing: %s - %s", playing.title.c_str(), playing.artist.c_str());
+        if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        if (ImGui::IsItemClicked()) {NowPlayingOpen = true; JustOpened = true;;}
     }
     if (iconButton("skip-back") && !library.empty()) {
         library.previous();
@@ -389,6 +391,23 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     }
     
     ImGui::End();
+
+    if (NowPlayingOpen) {
+        if (JustOpened) {
+            ImGui::SetNextWindowFocus();
+            JustOpened = false;
+        }
+        ImGui::SetNextWindowPos(viewport->WorkPos);
+        ImGui::SetNextWindowSize(viewport->WorkSize);
+        ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
+
+        ImGui::Begin("nowplaying", nullptr, flags);
+
+        if (ImGui::Button("X")) NowPlayingOpen = false;
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) NowPlayingOpen = false;
+
+        ImGui::End();
+    }
 
     if (showSoundCloud) {
         ImGui::SetNextWindowSize(ImVec2(700, 400), ImGuiCond_Appearing);
