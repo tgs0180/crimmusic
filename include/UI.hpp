@@ -9,6 +9,8 @@ struct SDL_Renderer;
 #include <filesystem>
 #include "CoverCache.hpp"
 #include "IconSet.hpp"
+#include "Lyrics.hpp"
+#include "LyricsMaker.hpp"
 
 class UI {
     public:
@@ -49,5 +51,24 @@ class UI {
         void drawQueue(Player& player, Library& lib, float iconSize = 0.0f);
         void drawVolume(Player& player, float width);
         void drawTimeSlider(Player& player, float width);
+        void drawLyrics(Player& player, Library& library, float x, float y, float width, float height);
 
+        Lyrics lyrics;
+        std::filesystem::path lyricsSong;
+        int shownLine = -1;
+        int previousLine = -1;
+        float lineSlide = 1.0f;
+
+        void drawMakeLyrics(Library& library);
+        void saveMadeLyrics(const MakerResult& result);
+        static void onMp3Chosen(void* userdata, const char* const* filelist, int filter);
+        static void onTxtChosen(void* userdata, const char* const* filelist, int filter);
+        LyricsMaker maker;
+        bool showMakeLyrics{false};
+        std::filesystem::path makeSong;
+        char makeLyricsText[65536] = "";
+        std::string pendingMp3;
+        std::string pendingTxt;
+        std::string dialogLocation;
+        std::string makeStatus;
 };

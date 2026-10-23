@@ -5,3 +5,6 @@ compile_commands.json
 
 # editor
 .vscode/
+
+# python
+__pycache__/

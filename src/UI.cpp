@@ -14,6 +14,9 @@
 #include <cstddef>
 #include "StringUtils.hpp"
 #include <string>
+#include <cstdlib>
+#include <fstream>
+#include <sstream>
 
 static void splitTime(float seconds, int& minutes, int& secs) {
     int total = static_cast<int>(seconds);
@@ -291,9 +294,60 @@ void UI::drawVolume(Player &player, float width) {
     }
 }
 
+void UI::drawLyrics(Player &player, Library &library, float x, float y, float width, float height) {
+    const Track& track = library.song(library.currentIndex());
+    const std::vector<LyricLine>& lines = lyrics.linesFor(track.file, track.artist, track.title);
+
+    if (track.file != lyricsSong) {
+        lyricsSong = track.file;
+        shownLine = -1;
+        previousLine = -1;
+        lineSlide = 1.0f;
+    }
+
+    int current = -1;
+    float position = player.position();
+    for (std::size_t i = 0; i < lines.size(); i++) {
+        if (lines[i].time > position) break;
+        current = static_cast<int>(i);
+    }
+
+    if (current != shownLine) {
+        previousLine = shownLine;
+        shownLine = current;
+        lineSlide = 0.0f;
+    }
+    lineSlide = std::clamp(lineSlide + ImGui::GetIO().DeltaTime / 0.3f, 0.0f, 1.0f);
+    float t = 1.0f - lineSlide;
+    float eased = 1.0f - t * t * t;
+
+    ImVec2 windowPos = ImGui::GetWindowPos();
+    ImVec2 areaMin(windowPos.x + x, windowPos.y + y);
+    ImVec2 areaMax(areaMin.x + width, areaMin.y + height);
+    float lineHeight = ImGui::GetTextLineHeight();
+    float centreY = areaMin.y + (height - lineHeight) / 2.0f;
+
+    ImGuiCol textColour = lyrics.isTranscribed(track.file) ? ImGuiCol_TextDisabled : ImGuiCol_Text;
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    drawList->PushClipRect(areaMin, areaMax, true);
+
+    auto drawLine = [&](int index, float lineY, float alpha) {
+        if (index < 0 || static_cast<std::size_t>(index) >= lines.size()) return;
+        std::string text = fitText(lines[static_cast<std::size_t>(index)].text, width);
+        if (text.empty()) return;
+        float textWidth = ImGui::CalcTextSize(text.c_str()).x;
+        drawList->AddText(ImVec2(areaMin.x + (width - textWidth) / 2.0f, lineY), ImGui::GetColorU32(textColour, alpha), text.c_str());
+    };
+    drawLine(previousLine, centreY - eased * height, 1.0f - eased);
+    drawLine(shownLine, centreY + (1.0f - eased) * height, eased);
+
+    drawList->PopClipRect();
+}
+
 void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     covers.update(renderer);
     bigCovers.update(renderer);
+    lyrics.update();
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
@@ -315,6 +369,9 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
         ImGui::MenuItem("Settings");
         if (ImGui::MenuItem("Search 3rd party")) {
             showSoundCloud = true;
+        }
+        if (ImGui::MenuItem("Make lyrics")) {
+            showMakeLyrics = true;
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Quit")) quit = true;
@@ -524,9 +581,15 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
             ImGui::SameLine();
             ImGui::SetCursorPosY(row2Top + (row2Height - ImGui::GetFrameHeight()) / 2.0f);
             drawVolume(player, volumeWidth);
+
+            drawLyrics(player, library, left + quarter, row2Top, width / 2.0f, row2Height);
         }
 
         ImGui::End();
+    }
+
+    if (showMakeLyrics) {
+        drawMakeLyrics(library);
     }
 
     if (showSoundCloud) {
@@ -601,6 +664,7 @@ UI::~UI() {
     icons.clear();
     covers.clear();
     bigCovers.clear();
+    lyrics.clear();
     if (imguiReady) {
         ImGui_ImplSDLRenderer3_Shutdown();
         ImGui_ImplSDL3_Shutdown();
@@ -609,4 +673,155 @@ UI::~UI() {
     if (renderer) SDL_DestroyRenderer(renderer);
     if (window) SDL_DestroyWindow(window);
     if (sdlReady) SDL_Quit();
+}
+
+void UI::onMp3Chosen(void *userdata, const char *const *filelist, int filter) {
+    if (filelist == nullptr || filelist[0] == nullptr) return;
+    UI* ui = static_cast<UI*>(userdata);
+    std::lock_guard<std::mutex> lock(ui->folderMutex);
+    ui->pendingMp3 = filelist[0];
+}
+
+void UI::onTxtChosen(void *userdata, const char *const *filelist, int filter) {
+    if (filelist == nullptr || filelist[0] == nullptr) return;
+    UI* ui = static_cast<UI*>(userdata);
+    std::lock_guard<std::mutex> lock(ui->folderMutex);
+    ui->pendingTxt = filelist[0];
+}
+
+void UI::saveMadeLyrics(const MakerResult &result) {
+    std::filesystem::path target = result.song;
+    target.replace_extension(".lrc");
+    std::error_code error;
+    if (std::filesystem::exists(target, error)) {
+        const char* home = std::getenv("HOME");
+        std::filesystem::path backup = std::filesystem::path(home ? home : ".") / ".cache" / "crimmusic" / "lrc-backup" / "manual";
+        std::filesystem::create_directories(backup, error);
+        std::filesystem::copy_file(target, backup / target.filename(), std::filesystem::copy_options::overwrite_existing, error);
+    }
+    std::ofstream out(target);
+    if (!out) {
+        makeStatus = "Could not write " + target.filename().string();
+        return;
+    }
+    out << result.lrc;
+    out.close();
+    lyrics.forget(result.song);
+    makeStatus = "Saved " + target.filename().string();
+}
+
+void UI::drawMakeLyrics(Library &library) {
+    {
+        std::string mp3, txt;
+        {
+            std::lock_guard<std::mutex> lock(folderMutex);
+            mp3.swap(pendingMp3);
+            txt.swap(pendingTxt);
+        }
+        if (!mp3.empty()) {
+            makeSong = mp3;
+            makeStatus.clear();
+        }
+        if (!txt.empty()) {
+            std::ifstream file(txt);
+            std::stringstream contents;
+            contents << file.rdbuf();
+            std::string text = contents.str();
+            if (text.size() >= sizeof(makeLyricsText)) text.resize(sizeof(makeLyricsText) - 1);
+            std::copy(text.begin(), text.end(), makeLyricsText);
+            makeLyricsText[text.size()] = '\0';
+        }
+    }
+
+    ImGui::SetNextWindowSize(ImVec2(640, 620), ImGuiCond_Appearing);
+    if (!ImGui::Begin("Make lyrics", &showMakeLyrics)) {
+        ImGui::End();
+        return;
+    }
+
+    static const SDL_DialogFileFilter mp3Filter[] = { { "MP3 audio", "mp3" } };
+    static const SDL_DialogFileFilter txtFilter[] = { { "Text files", "txt;lrc" }, { "All files", "*" } };
+    if (!library.empty()) dialogLocation = library.currentSong().parent_path().string();
+
+    ImGui::TextDisabled("Song");
+    ImGui::TextWrapped("%s", makeSong.empty() ? "(none chosen)" : makeSong.filename().string().c_str());
+    if (ImGui::Button("Choose mp3...")) {
+        SDL_ShowOpenFileDialog(onMp3Chosen, this, window, mp3Filter, 1, dialogLocation.empty() ? nullptr : dialogLocation.c_str(), false);
+    }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(library.empty());
+    if (ImGui::Button("Use current song")) {
+        makeSong = library.currentSong();
+        makeStatus.clear();
+    }
+    ImGui::EndDisabled();
+
+    ImGui::Separator();
+    ImGui::TextDisabled("Lyrics, one line per lyric line");
+    if (ImGui::Button("Load text file...")) {
+        SDL_ShowOpenFileDialog(onTxtChosen, this, window, txtFilter, 2, dialogLocation.empty() ? nullptr : dialogLocation.c_str(), false);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Clear")) makeLyricsText[0] = '\0';
+    ImGui::InputTextMultiline("##makelyrics", makeLyricsText, sizeof(makeLyricsText), ImVec2(-1, 200));
+
+    ImGui::Separator();
+    MakerResult result = maker.snapshot();
+    bool running = result.state == MakerState::Running;
+    bool available = LyricsMaker::available();
+    ImGui::BeginDisabled(running || makeSong.empty() || makeLyricsText[0] == '\0' || !available);
+    if (ImGui::Button("Make timed lyrics")) {
+        makeStatus.clear();
+        maker.start(makeSong, makeLyricsText);
+    }
+    ImGui::EndDisabled();
+
+    if (!available) {
+        ImGui::TextColored(hexColor(palette::bright), "The lyrics tool is not set up. Run tools/lyrics/setup.sh first.");
+    }
+    if (running) {
+        int dots = static_cast<int>(ImGui::GetTime() * 2.0) % 4;
+        ImGui::Text("Listening to the song and placing the lines%s", std::string(dots, '.').c_str());
+        ImGui::TextDisabled("This takes about 10 seconds to a minute.");
+    }
+    else if (result.state == MakerState::Failed) {
+        ImGui::TextColored(hexColor(palette::bright), "%s", result.message.c_str());
+    }
+    else if (result.state == MakerState::Done) {
+        ImGui::TextWrapped("%s", result.song.filename().string().c_str());
+        if (result.matches) {
+            ImGui::Text("%d lines timed. %.0f%% of the lyric words were heard in the song.", result.lines, result.words * 100.0f);
+        }
+        else {
+            ImGui::TextColored(hexColor(palette::bright), "Warning: only %.0f%% of these words are heard in the song.", result.words * 100.0f);
+            ImGui::TextWrapped("These lyrics probably belong to another song, or the song is very hard to understand. Check the preview before saving.");
+        }
+        if (result.weakLines > 0) {
+            ImGui::TextDisabled("%d lines could not be heard clearly, their times are estimated.", result.weakLines);
+        }
+        if (!result.dropped.empty()) {
+            ImGui::TextDisabled("%d repeated lines were left out because they are not sung in this version.", static_cast<int>(result.dropped.size()));
+        }
+
+        std::vector<LyricLine> preview = Lyrics::parse(result.lrc);
+        ImGui::BeginChild("makepreview", ImVec2(0, 150), ImGuiChildFlags_Borders);
+        for (const LyricLine& line : preview) {
+            int minutes, seconds;
+            splitTime(line.time, minutes, seconds);
+            ImGui::TextDisabled("%d:%02d", minutes, seconds);
+            ImGui::SameLine();
+            ImGui::TextUnformatted(line.text.c_str());
+        }
+        ImGui::EndChild();
+
+        if (ImGui::Button("Save as .lrc next to the song")) {
+            saveMadeLyrics(result);
+        }
+    }
+    if (!makeStatus.empty()) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", makeStatus.c_str());
+    }
+
+    ImGui::End();
 }
