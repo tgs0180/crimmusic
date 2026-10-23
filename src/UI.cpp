@@ -332,17 +332,40 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     }
     ImGui::SetItemTooltip("Queue");
     ImGui::SetNextWindowPos(ImGui::GetItemRectMin(), ImGuiCond_Appearing, ImVec2(0.5f, 1.0f));
-    ImGui::SetNextWindowSize(ImVec2(350, 400), ImGuiCond_Appearing);
     if (ImGui::BeginPopup("queue")) {
         ImGui::TextDisabled("Up next");
         ImGui::Separator();
-        std::vector<std::size_t> next = library.upcoming(20);
+        ImGui::BeginChild("Queuelist", ImVec2(500, 400));
+        std::vector<std::size_t> next = library.upcoming(library.size());
         if (next.empty()) ImGui::Text("It's quiet in here...");
         else {
-            for (int k = 0; k < next.size(); k++) {
-                const Track& t = library.song(next[k]);
-                ImGui::PushID(static_cast<int>(k));
-                if (ImGui::Selectable((t.title + " - "+  t.artist).c_str())) {
+            float rowHeight = ImGui::GetTextLineHeightWithSpacing() * 2;
+            float coverSize = 32.0f;
+            // the clipper only hands out the rows that are actually visible in the scroll area
+            ImGuiListClipper clipper;
+            clipper.Begin(static_cast<int>(next.size()));
+            while (clipper.Step()) {
+            for (int k = clipper.DisplayStart; k < clipper.DisplayEnd; k++) {
+                const Track& t = library.song(next[static_cast<std::size_t>(k)]);
+                ImGui::PushID(k);
+                ImVec2 start = ImGui::GetCursorPos();
+                bool clicked = ImGui::Selectable("##row", false, 0, ImVec2(0, rowHeight));
+                ImGui::SetCursorPos(start);
+                covers.request(t.file);
+                SDL_Texture* tex = covers.get(t.file);
+                if (tex) {
+                    ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(coverSize, coverSize));
+                }
+                else {
+                    ImGui::Dummy(ImVec2(coverSize, coverSize));
+                }
+                ImGui::SameLine();
+                ImGui::BeginGroup();
+                auto textwidth = ImGui::GetContentRegionAvail().x;
+                ImGui::TextUnformatted(fitText(t.title, textwidth).c_str());
+                ImGui::TextDisabled("%s", fitText(t.artist, textwidth).c_str());
+                ImGui::EndGroup();
+                if (clicked) {
                     int x = k + 1;
                     while(x != 0) {
                         library.next();
@@ -352,7 +375,9 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
                 }
                 ImGui::PopID();
             }
+            }
         }
+        ImGui::EndChild();
         ImGui::EndPopup();
     }
 
