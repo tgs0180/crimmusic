@@ -27,6 +27,7 @@ class Library {
         bool atEnd() const;
         bool shuffled() const;
         void setShuffle(bool on);
+        std::vector<std::size_t> upcoming(std::size_t count) const;
 
     private:
         std::vector<Track> songs;

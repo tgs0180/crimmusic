@@ -139,3 +139,28 @@ void Library::setShuffle(bool on) {
     shuffle = on;
     if (shuffle) buildOrder();
 }
+
+std::vector<size_t> Library::upcoming(std::size_t count) const {
+    auto result = std::vector<size_t>();
+    std::size_t song = 0;
+    if (songs.empty()) return result;
+    if (count >= songs.size()) count = songs.size() - 1 ;
+    for (int step = 1; step <= count; step++) {
+        if (shuffle) {
+            if (repeatMode() == RepeatMode::Off) {
+                if ((orderPosition + step)> songs.size()) break;
+            }
+            auto position = (orderPosition + step) % order.size();
+            song = order[position];
+        }
+        else if (!shuffle) {
+            if (repeatMode() == RepeatMode::Off) {
+                if ((current + step) > songs.size()) break;
+            }
+            auto position = (current + step) % songs.size();
+            song = position;
+        }
+        result.push_back(song);
+    }
+    return result;
+}

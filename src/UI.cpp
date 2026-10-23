@@ -188,7 +188,7 @@ bool UI::processEvents() {
     }
     return true;
 }
-// decides what gets drawn.
+// ! decides what gets drawn.
 void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     covers.update(renderer);
     ImGui_ImplSDLRenderer3_NewFrame();
@@ -296,7 +296,7 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     }
 
     ImGui::SameLine();
-    float rightSide = ImGui::CalcTextSize("00:00 / 00:00").x + 150 + ImGui::GetStyle().ItemSpacing.x * 4 + iconButtonWidth()*2;
+    float rightSide = ImGui::CalcTextSize("00:00 / 00:00").x + 150 + ImGui::GetStyle().ItemSpacing.x * 5 + iconButtonWidth()*3;
     ImGui::SetNextItemWidth(-rightSide);
     float pos = player.position();
     if (ImGui::SliderFloat("##position", &pos, 0.0f, player.length(), "")) {
@@ -324,6 +324,36 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
     ImGui::SameLine();
     if (iconButton("shuffle", library.shuffled())) {
         library.setShuffle(!library.shuffled());
+    }
+
+    ImGui::SameLine();
+    if (iconButton("list-video")) {
+        ImGui::OpenPopup("queue");
+    }
+    ImGui::SetItemTooltip("Queue");
+    ImGui::SetNextWindowPos(ImGui::GetItemRectMin(), ImGuiCond_Appearing, ImVec2(0.5f, 1.0f));
+    ImGui::SetNextWindowSize(ImVec2(350, 400), ImGuiCond_Appearing);
+    if (ImGui::BeginPopup("queue")) {
+        ImGui::TextDisabled("Up next");
+        ImGui::Separator();
+        std::vector<std::size_t> next = library.upcoming(20);
+        if (next.empty()) ImGui::Text("It's quiet in here...");
+        else {
+            for (int k = 0; k < next.size(); k++) {
+                const Track& t = library.song(next[k]);
+                ImGui::PushID(static_cast<int>(k));
+                if (ImGui::Selectable((t.title + " - "+  t.artist).c_str())) {
+                    int x = k + 1;
+                    while(x != 0) {
+                        library.next();
+                        x -= 1;
+                    }
+                    player.play(library.currentSong());
+                }
+                ImGui::PopID();
+            }
+        }
+        ImGui::EndPopup();
     }
 
     ImGui::SameLine();

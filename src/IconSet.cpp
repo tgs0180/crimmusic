@@ -4,7 +4,7 @@
 #include <iostream>
 
 bool IconSet::load(SDL_Renderer *renderer, const std::filesystem::path &folder) {
-    const char* names[] = { "play", "pause", "skip-back", "skip-forward", "repeat", "repeat-1", "repeat-off", "shuffle" };
+    const char* names[] = { "play", "pause", "skip-back", "skip-forward", "repeat", "repeat-1", "repeat-off", "shuffle", "list-video" };
     bool allLoaded = true;
     for (const char* name : names) {
         std::string path = (folder / (std::string(name) + ".png")).string();
