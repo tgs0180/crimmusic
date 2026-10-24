@@ -11,6 +11,7 @@
 #include <SDL3/SDL_video.h>
 #include <algorithm>
 #include <cfloat>
+#include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <cstddef>
@@ -71,6 +72,7 @@ static ImVec4 hexColor(unsigned int rgb, float alpha = 1.0f) {
 
 namespace palette {
     constexpr unsigned int base    = 0x0d0809;
+    constexpr unsigned int pink    = 0xff6b9a;
     constexpr unsigned int surface = 0x1b1114;
     constexpr unsigned int overlay = 0x2a191d;
     constexpr unsigned int muted   = 0x75595f;
@@ -208,6 +210,10 @@ void UI::drawQueue(Player &player, Library &lib, float iconSize) {
     }
     ImGui::SetItemTooltip("Queue");
     ImGui::SetNextWindowPos(ImGui::GetItemRectMin(), ImGuiCond_Appearing, ImVec2(0.5f, 1.0f));
+    drawQueuePopup(player, lib);
+}
+
+void UI::drawQueuePopup(Player &player, Library &lib) {
     if (ImGui::BeginPopup("queue")) {
         ImGui::TextDisabled("Up next");
         ImGui::Separator();
@@ -513,7 +519,6 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
         if (!desktopLayout && ratio > 1.25f) desktopLayout=true;
         else if (desktopLayout && ratio < 1.10f) desktopLayout = false;
 
-        if (ImGui::Button("X")) NowPlayingTarget = false;
         if (ImGui::IsKeyPressed(ImGuiKey_Escape)) NowPlayingTarget = false;
 
         if (library.empty()) {
@@ -523,8 +528,8 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
         else {
             Area full{origin.x, origin.y, width, height};
             const Track& track = library.song(library.currentIndex());
-            if (desktopLayout) layoutDesktop(full, track);
-            else layoutPortrait(full, track);
+            if (desktopLayout) layoutDesktop(full, track, player, library);
+            else layoutPortrait(full, track, player, library);
         }
         /*else {
             const Track& t = library.song(library.currentIndex());
@@ -1112,14 +1117,53 @@ static std::string fitTextIn(ImFont* font, float size, const std::string& text, 
     return cut + "...";
 }
 
-static void drawPlaceholder(Area a, const char* name) {
+bool UI::npIcon(const char* id, const char* icon, float cx, float cy, float size, unsigned int tint) {
+    float pad = 8.0f;
+    ImGui::SetCursorScreenPos(ImVec2(cx - size / 2 - pad, cy - size / 2 - pad));
+    bool clicked = ImGui::InvisibleButton(id, ImVec2(size + pad * 2, size + pad * 2));
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddRect(ImVec2(a.x, a.y), ImVec2(a.x + a.w, a.y + a.h), IM_COL32(255, 255, 255, 80));
-    dl->AddText(ImVec2(a.x + 4, a.y + 4), IM_COL32(255, 255, 255, 160), name);
+    if (ImGui::IsItemHovered()) dl->AddCircleFilled(ImVec2(cx, cy), size * 0.5f + pad, IM_COL32(255, 255, 255, 18));
+    SDL_Texture* tex = icons.get(icon);
+    if (tex != nullptr) {
+        dl->AddImage((ImTextureID)(intptr_t)tex, ImVec2(cx - size / 2, cy - size / 2), ImVec2(cx + size / 2, cy + size / 2), ImVec2(0, 0), ImVec2(1, 1), tint);
+    }
+    else {
+        drawText(fontRegular, 14.0f, cx - textWidth(fontRegular, 14.0f, icon) / 2, cy - 7.0f, tint, icon);
+    }
+    return clicked;
 }
 
-void UI::drawNpTopBar(Area a) {
-    drawPlaceholder(a, "top bar");
+void UI::drawNpTopBar(Area a, Library& library) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImU32 white = ImGui::GetColorU32(ImGuiCol_Text);
+    float cy = a.y + a.h / 2;
+
+    float leftX = a.x + 36;
+    ImGui::SetCursorScreenPos(ImVec2(leftX - 20, cy - 18));
+    if (ImGui::InvisibleButton("##npclose", ImVec2(40, 36))) NowPlayingTarget = false;
+    if (ImGui::IsItemHovered()) dl->AddCircleFilled(ImVec2(leftX, cy), 18, IM_COL32(255, 255, 255, 18));
+    ImVec2 chevron[3] = { ImVec2(leftX - 10, cy - 5), ImVec2(leftX, cy + 5), ImVec2(leftX + 10, cy - 5) };
+    dl->AddPolyline(chevron, 3, white, ImDrawFlags_None, 2.0f);
+
+    float rightX = a.x + a.w - 36;
+    ImGui::SetCursorScreenPos(ImVec2(rightX - 20, cy - 18));
+    if (ImGui::InvisibleButton("##npmenu", ImVec2(40, 36))) ImGui::OpenPopup("npmenu");
+    if (ImGui::IsItemHovered()) dl->AddCircleFilled(ImVec2(rightX, cy), 18, IM_COL32(255, 255, 255, 18));
+    for (int i = -1; i <= 1; i++) dl->AddCircleFilled(ImVec2(rightX + i * 8.0f, cy), 2.5f, white);
+
+    ImGui::SetNextWindowPos(ImVec2(rightX, cy + 18), ImGuiCond_Appearing, ImVec2(1.0f, 0.0f));
+    if (ImGui::BeginPopup("npmenu")) {
+        if (ImGui::MenuItem("Edit lyrics", nullptr, false, !library.empty())) {
+            loadEditLyrics(library.currentSong());
+            showEditLyrics = true;
+        }
+        if (ImGui::MenuItem("Make lyrics", nullptr, false, !library.empty())) {
+            makeSong = library.currentSong();
+            makeStatus.clear();
+            showMakeLyrics = true;
+        }
+        ImGui::EndPopup();
+    }
 }
 
 void UI::drawNpHeader(Area a, const Track& track) {
@@ -1156,7 +1200,6 @@ void UI::drawNpHeader(Area a, const Track& track) {
 }
 
 void UI::drawNpCover(Area a, const Track& track) {
-    drawPlaceholder(a, "cover");
     bigCovers.request(track.file);
     auto tex = bigCovers.get(track.file);
     ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -1176,23 +1219,180 @@ void UI::drawNpTitle(Area a, const Track& track) {
     drawText(fontRegular, 22, a.x, a.y + 32 + 4, subtle, fitTextIn(fontRegular, 22, track.artist, a.w).c_str());
 }
 
-void UI::drawNpControls(Area a) {
-    drawPlaceholder(a, "controls");
+void UI::drawNpControls(Area a, Player& player, Library& library) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImU32 white = ImGui::GetColorU32(ImGuiCol_Text);
+    ImU32 crimson = ImGui::GetColorU32(hexColor(palette::crimson));
+    float cy = a.y + a.h / 2;
+    float big = std::min(a.h * 0.42f, 38.0f);
+    float icon = std::min(a.h * 0.3f, 28.0f);
+    float step = a.w / 4;
+
+    if (npIcon("##npshuffle", "shuffle", a.x + icon / 2, cy, icon, library.shuffled() ? crimson : white)) {
+        library.setShuffle(!library.shuffled());
+    }
+
+    if (npIcon("##npprev", "skip-back", a.x + step, cy, icon, white) && !library.empty()) {
+        library.previous();
+        player.play(library.currentSong());
+    }
+
+    float mx = a.x + a.w / 2;
+    ImGui::SetCursorScreenPos(ImVec2(mx - big, cy - big));
+    if (ImGui::InvisibleButton("##npplay", ImVec2(big * 2, big * 2))) player.togglePause();
+    if (ImGui::IsItemHovered()) dl->AddCircleFilled(ImVec2(mx, cy), big, IM_COL32(224, 16, 64, 40));
+    dl->AddCircle(ImVec2(mx, cy), big, crimson, 0, 2.5f);
+    SDL_Texture* playTex = icons.get(player.isPlaying() ? "pause" : "play");
+    float inner = big * 0.85f;
+    if (playTex != nullptr) {
+        dl->AddImage((ImTextureID)(intptr_t)playTex, ImVec2(mx - inner / 2, cy - inner / 2), ImVec2(mx + inner / 2, cy + inner / 2), ImVec2(0, 0), ImVec2(1, 1), white);
+    }
+
+    if (npIcon("##npnext", "skip-forward", a.x + step * 3, cy, icon, white) && !library.empty()) {
+        library.next();
+        player.play(library.currentSong());
+    }
+
+    RepeatMode mode = library.repeatMode();
+    const char* repeatIcon = mode == RepeatMode::Off ? "repeat-off" : mode == RepeatMode::All ? "repeat" : "repeat-1";
+    if (npIcon("##nprepeat", repeatIcon, a.x + a.w - icon / 2, cy, icon, mode == RepeatMode::Off ? white : crimson)) {
+        if (mode == RepeatMode::All) library.setRepeatMode(RepeatMode::Off);
+        else if (mode == RepeatMode::Off) library.setRepeatMode(RepeatMode::One);
+        else library.setRepeatMode(RepeatMode::All);
+    }
 }
 
-void UI::drawNpProgress(Area a) {
-    drawPlaceholder(a, "progress");
+void UI::drawNpProgress(Area a, Player& player) {
+    float lineY = a.y + 8;
+    float length = player.length();
+    float fraction = length > 0 ? player.position() / length : 0.0f;
+
+    ImGui::SetCursorScreenPos(ImVec2(a.x, lineY - 10));
+    ImGui::InvisibleButton("##seek", ImVec2(a.w, 20));
+    bool hovered = ImGui::IsItemHovered();
+    bool active = ImGui::IsItemActive();
+
+    if (active && length > 0) {
+        float mouseX = ImGui::GetIO().MousePos.x;
+        fraction = std::clamp((mouseX - a.x) / a.w, 0.0f, 1.0f);
+        player.seek(fraction*length);
+    }
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    float knobX = a.x + fraction * a.w;
+    dl->AddRectFilled(ImVec2(a.x, lineY -1.5f), ImVec2(a.x + a.w, lineY + 1.5f), IM_COL32(255,255,255,50), 2.0f);
+    dl->AddRectFilled(ImVec2(a.x, lineY - 1.5f), ImVec2(knobX, lineY + 1.5f), ImGui::GetColorU32(hexColor(palette::crimson)), 2.0f);
+    dl->AddCircleFilled(ImVec2(knobX, lineY), (hovered || active) ? 8.0f : 6.0f, IM_COL32_WHITE);
+
+    ImU32 subtle = ImGui::GetColorU32(hexColor(palette::subtle));
+    const float timeSize = 14.0f;
+    char buffer[16];
+    int minutes, seconds;
+    splitTime(fraction * length, minutes, seconds);
+    std::snprintf(buffer, sizeof(buffer), "%d:%02d", minutes, seconds);
+    drawText(fontRegular, timeSize, a.x, a.y + 22, subtle, buffer);
+    splitTime(length, minutes, seconds);
+    std::snprintf(buffer, sizeof(buffer), "%d:%02d", minutes, seconds);
+    drawText(fontRegular, timeSize, a.x + a.w - textWidth(fontRegular, timeSize, buffer), a.y + 22, subtle, buffer);
 }
 
-void UI::drawNpLyrics(Area a) {
-    drawPlaceholder(a, "lyrics");
+void UI::drawNpLyrics(Area a, Player& player, const Track& track) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const std::vector<LyricLine>& lines = lyrics.linesFor(track.file, track.artist, track.title);
+    bool transcribed = lyrics.isTranscribed(track.file);
+
+    float lineTop = a.y + 4;
+    float lineBottom = a.y + a.h - 4;
+    float fadeLeft = a.x + a.w * 0.08f;
+    float fadeRight = a.x + a.w * 0.92f;
+    float mid = (fadeLeft + fadeRight) / 2;
+    ImU32 clear = IM_COL32(224, 16, 64, 0);
+    ImU32 glow = IM_COL32(224, 16, 64, 170);
+    for (float ly : { lineTop, lineBottom }) {
+        dl->AddRectFilledMultiColor(ImVec2(fadeLeft, ly), ImVec2(mid, ly + 1.5f), clear, glow, glow, clear);
+        dl->AddRectFilledMultiColor(ImVec2(mid, ly), ImVec2(fadeRight, ly + 1.5f), glow, clear, clear, glow);
+    }
+
+    float position = player.position();
+    int current = -1;
+    for (std::size_t i = 0; i < lines.size(); i++) {
+        if (lines[i].time > position) break;
+        current = static_cast<int>(i);
+    }
+    if (track.file != npLyricSong) {
+        npLyricSong = track.file;
+        npLyricScroll = static_cast<float>(current);
+    }
+    float target = static_cast<float>(current);
+    npLyricScroll += (target - npLyricScroll) * std::min(1.0f, ImGui::GetIO().DeltaTime * 10.0f);
+    if (std::abs(target - npLyricScroll) < 0.001f) npLyricScroll = target;
+
+    if (lines.empty()) {
+        const char* none = "No lyrics for this song";
+        drawText(fontRegular, 15.0f, a.x + (a.w - textWidth(fontRegular, 15.0f, none)) / 2, a.y + a.h / 2 - 8, ImGui::GetColorU32(hexColor(palette::muted)), none);
+        return;
+    }
+
+    float centreY = a.y + a.h / 2;
+    float spacing = (a.h - 12) / 3.0f;
+    ImVec4 pink = transcribed ? hexColor(palette::subtle) : hexColor(palette::pink);
+    ImVec4 grey = hexColor(palette::subtle);
+    float dim = transcribed ? 0.7f : 1.0f;
+
+    dl->PushClipRect(ImVec2(a.x, lineTop + 2), ImVec2(a.x + a.w, lineBottom - 1), true);
+    int first = static_cast<int>(std::floor(npLyricScroll)) - 2;
+    for (int i = first; i <= first + 5; i++) {
+        if (i < 0 || static_cast<std::size_t>(i) >= lines.size()) continue;
+        float offset = i - npLyricScroll;
+        float d = std::min(std::abs(offset), 2.0f);
+        float closeness = std::max(0.0f, 1.0f - d);
+        float size = 17.0f + 7.0f * closeness;
+        ImFont* font = closeness > 0.5f ? fontBold : fontRegular;
+        float alpha = (d <= 1.0f ? 0.6f + 0.4f * closeness : 0.6f * std::max(0.0f, 2.0f - d)) * dim;
+        ImVec4 colour(grey.x + (pink.x - grey.x) * closeness, grey.y + (pink.y - grey.y) * closeness, grey.z + (pink.z - grey.z) * closeness, alpha);
+        std::string text = fitTextIn(font, size, lines[static_cast<std::size_t>(i)].text, a.w * 0.9f);
+        if (text.empty()) continue;
+        float y = centreY + offset * spacing - size / 2;
+        drawText(font, size, a.x + (a.w - textWidth(font, size, text.c_str())) / 2, y, ImGui::GetColorU32(colour), text.c_str());
+    }
+    dl->PopClipRect();
 }
 
-void UI::drawNpBottomBar(Area a) {
-    drawPlaceholder(a, "bottom bar");
+static void drawSpeaker(ImDrawList* dl, float cx, float cy, ImU32 colour) {
+    dl->AddRectFilled(ImVec2(cx - 9, cy - 3.5f), ImVec2(cx - 4, cy + 3.5f), colour);
+    dl->AddTriangleFilled(ImVec2(cx - 5, cy - 3.5f), ImVec2(cx + 2, cy - 9), ImVec2(cx + 2, cy + 9), colour);
+    dl->AddTriangleFilled(ImVec2(cx - 5, cy - 3.5f), ImVec2(cx + 2, cy + 9), ImVec2(cx - 5, cy + 3.5f), colour);
+    dl->PathArcTo(ImVec2(cx + 2, cy), 6.0f, -0.9f, 0.9f);
+    dl->PathStroke(colour, ImDrawFlags_None, 1.8f);
+    dl->PathArcTo(ImVec2(cx + 2, cy), 10.5f, -0.9f, 0.9f);
+    dl->PathStroke(colour, ImDrawFlags_None, 1.8f);
 }
 
-void UI::layoutPortrait(Area full, const Track& track) {
+void UI::drawNpBottomBar(Area a, Player& player, Library& library) {
+    ImU32 white = ImGui::GetColorU32(ImGuiCol_Text);
+    float cy = a.y + a.h / 2;
+
+    float leftX = a.x + 36;
+    if (npIcon("##npqueue", "list-video", leftX, cy, 26.0f, white)) ImGui::OpenPopup("queue");
+    ImGui::SetItemTooltip("Queue");
+    ImGui::SetNextWindowPos(ImVec2(leftX - 20, a.y), ImGuiCond_Appearing, ImVec2(0.0f, 1.0f));
+    drawQueuePopup(player, library);
+
+    float rightX = a.x + a.w - 36;
+    ImGui::SetCursorScreenPos(ImVec2(rightX - 20, cy - 18));
+    if (ImGui::InvisibleButton("##npvolume", ImVec2(40, 36))) ImGui::OpenPopup("npvolume");
+    ImGui::SetItemTooltip("Volume");
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    if (ImGui::IsItemHovered()) dl->AddCircleFilled(ImVec2(rightX, cy), 18, IM_COL32(255, 255, 255, 18));
+    drawSpeaker(dl, rightX, cy, white);
+    ImGui::SetNextWindowPos(ImVec2(rightX + 20, a.y), ImGuiCond_Appearing, ImVec2(1.0f, 1.0f));
+    if (ImGui::BeginPopup("npvolume")) {
+        drawVolume(player, 200.0f);
+        ImGui::EndPopup();
+    }
+}
+
+void UI::layoutPortrait(Area full, const Track& track, Player& player, Library& library) {
     const float topBar = 50, header = 90, title = 70, progress = 50, controls = 90, lyrics = 130, bottomBar = 50;
     float fixed = topBar + header + title + progress + controls + lyrics + bottomBar;
 
@@ -1201,24 +1401,23 @@ void UI::layoutPortrait(Area full, const Track& track) {
     float cover = std::max(80.0f, std::min(colW, full.h - fixed));
 
     float y = full.y;
-    drawNpTopBar({full.x, y, full.w, topBar});                  y += topBar;
-    drawNpHeader({colX, y, colW, header}, track);                      y += header;
-    drawNpCover({colX + (colW - cover) / 2, y, cover, cover}, track);  y += cover;
-    drawNpTitle({colX, y, colW, title}, track);                        y += title;
-    drawNpProgress({colX, y, colW, progress});                  y += progress;
-    drawNpControls({colX, y, colW, controls});                  y += controls;
-    drawNpLyrics({colX, y, colW, lyrics});
-    drawNpBottomBar({full.x, full.y + full.h - bottomBar, full.w, bottomBar});
+    drawNpTopBar({full.x, y, full.w, topBar}, library);                     y += topBar;
+    drawNpHeader({colX, y, colW, header}, track);                           y += header;
+    drawNpCover({colX + (colW - cover) / 2, y, cover, cover}, track);       y += cover;
+    drawNpTitle({colX, y, colW, title}, track);                             y += title;
+    drawNpProgress({colX, y, colW, progress}, player);                      y += progress;
+    drawNpControls({colX, y, colW, controls}, player, library);             y += controls;
+    drawNpLyrics({colX, y, colW, lyrics}, player, track);
+    drawNpBottomBar({full.x, full.y + full.h - bottomBar, full.w, bottomBar}, player, library);
 }
 
-void UI::layoutDesktop(Area full, const Track& track) {
+void UI::layoutDesktop(Area full, const Track& track, Player& player, Library& library) {
     const float topBar = 50, title = 90, progress = 50, controls = 100, lyrics = 160, bottomBar = 50;
     const float margin = full.w * 0.06f;
     const float gap = 60;
 
-    drawNpTopBar({full.x, full.y, full.w, topBar});
-    drawNpBottomBar({full.x, full.y + full.h - bottomBar, full.w, bottomBar});;
-
+    drawNpTopBar({full.x, full.y, full.w, topBar}, library);
+    drawNpBottomBar({full.x, full.y + full.h - bottomBar, full.w, bottomBar}, player, library);
 
     float midY = full.y + topBar;
     float midH = full.h - topBar - bottomBar;
@@ -1233,8 +1432,8 @@ void UI::layoutDesktop(Area full, const Track& track) {
 
     float block = title + progress + controls + lyrics;
     float y = midY + (midH - block) / 2;
-    drawNpTitle({rightX, y, rightW, title}, track);    y += title;
-    drawNpProgress({rightX, y, rightW, progress}); y+=progress;
-    drawNpControls({rightX, y, rightW, controls});  y+= controls;
-    drawNpLyrics({rightX, y, rightW, lyrics});
+    drawNpTitle({rightX, y, rightW, title}, track);                 y += title;
+    drawNpProgress({rightX, y, rightW, progress}, player);          y += progress;
+    drawNpControls({rightX, y, rightW, controls}, player, library); y += controls;
+    drawNpLyrics({rightX, y, rightW, lyrics}, player, track);
 }

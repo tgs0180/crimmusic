@@ -94,17 +94,21 @@ class UI {
         bool editDirty{false};
         std::string editStatus;
 
-        void drawNpTopBar(Area a);
+        void drawNpTopBar(Area a, Library& library);
         void drawNpHeader(Area a, const Track& track);
         void drawNpCover(Area a, const Track& track);
         void drawNpTitle(Area a, const Track& track);
-        void drawNpControls(Area a);
-        void drawNpProgress(Area a);
-        void drawNpLyrics(Area a);
-        void drawNpBottomBar(Area a);
+        void drawNpControls(Area a, Player& player, Library& library);
+        void drawNpProgress(Area a, Player& player);
+        void drawNpLyrics(Area a, Player& player, const Track& track);
+        void drawNpBottomBar(Area a, Player& player, Library& library);
+        bool npIcon(const char* id, const char* icon, float cx, float cy, float size, unsigned int tint);
+        void drawQueuePopup(Player& player, Library& lib);
+        float npLyricScroll{0.0f};
+        std::filesystem::path npLyricSong;
 
-        void layoutPortrait(Area full, const Track& track);
-        void layoutDesktop(Area full, const Track& track);
+        void layoutPortrait(Area full, const Track& track, Player& player, Library& library);
+        void layoutDesktop(Area full, const Track& track, Player& player, Library& library);
 
         bool desktopLayout{false};
 

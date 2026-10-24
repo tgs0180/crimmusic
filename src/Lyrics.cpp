@@ -14,6 +14,30 @@ static std::string trim(const std::string& text) {
     return text.substr(start, end - start + 1);
 }
 
+static std::string withoutBrackets(const std::string& text) {
+    std::string out;
+    int depth = 0;
+    for (char c : text) {
+        if (c == '[') {
+            depth++;
+            continue;
+        }
+        if (c == ']' && depth > 0) {
+            depth--;
+            continue;
+        }
+        if (depth == 0) out += c;
+    }
+    std::string collapsed;
+    for (char c : out) {
+        if (c == ' ' && !collapsed.empty() && collapsed.back() == ' ') continue;
+        collapsed += c;
+    }
+    collapsed = trim(collapsed);
+    while (!collapsed.empty() && (collapsed.front() == ',' || collapsed.front() == ' ')) collapsed.erase(collapsed.begin());
+    return collapsed;
+}
+
 static std::string cleanTitle(const std::string& title, const std::string& artist) {
     std::string out;
     int depth = 0;
@@ -86,7 +110,7 @@ std::vector<LyricLine> Lyrics::parse(const std::string& lrc) {
             pos = close + 1;
         }
         if (times.empty()) continue;
-        std::string text = trim(line.substr(pos));
+        std::string text = withoutBrackets(trim(line.substr(pos)));
         for (float time : times) {
             lines.push_back(LyricLine{time, text});
         }

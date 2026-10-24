@@ -7,6 +7,7 @@ import sources
 from align import align, to_lrc, transcript
 from transcribed import assess
 from verify import parse_lrc, text_ok, timing_fraction
+from split_commas import split_lrc
 
 CREDIT = re.compile(r"^\s*(作词|作曲|编曲|制作人|混音|母带|和声|吉他|贝斯|鼓|录音|监制|出品|OP|SP|Lyricist|Composer|Producer|Arranger)\s*[:：]", re.I)
 PRIORITY = {"lrclib-plain": 0, "netease": 1, "youtube-description": 2, "soundcloud-description": 3}
@@ -140,6 +141,7 @@ def main():
     title = args.title or title
     code, lrc = decide(mp3, artist, title, duration, log=lambda m: print(f"[lyrics] {mp3.name}: {m}", flush=True))
     if code == WRITTEN and not mp3.with_suffix(".lrc").exists():
+        lrc, _ = split_lrc(lrc, mp3, duration)
         mp3.with_suffix(".lrc").write_text(lrc)
     sys.exit(code)
 

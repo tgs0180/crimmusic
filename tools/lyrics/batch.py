@@ -3,6 +3,7 @@ import argparse, json, pathlib, shutil, sys, time
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 
 from make_lrc import NOTHING, TEMPORARY, WRITTEN, decide, tags
+from split_commas import split_lrc
 
 ap = argparse.ArgumentParser()
 ap.add_argument("folder")
@@ -32,6 +33,7 @@ for i, mp3 in enumerate(songs):
     code, lrc = decide(mp3, artist, title, duration, inventory.get(str(mp3)), candidates.get(str(mp3)), log=notes.append)
     source = None
     if code == WRITTEN:
+        lrc, _ = split_lrc(lrc, mp3, duration)
         lrc_path.write_text(lrc)
         source = next((l[8:-1] for l in lrc.splitlines() if l.startswith("[source:")), None)
     report[str(mp3)] = {"code": code, "source": source, "notes": notes}

@@ -5,6 +5,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from align import align, to_lrc
 from make_lrc import tags
 from verify import text_ok
+from split_commas import split_lrc
 
 
 def main():
@@ -35,7 +36,8 @@ def main():
                 result["message"] = "No lyric lines found in the text."
             else:
                 header = {"ar": artist, "ti": title, "source": "manual lyrics, aligned to this file", "re": "crimmusic make lyrics"}
-                pathlib.Path(args.out_lrc).write_text(to_lrc(res, header), encoding="utf-8")
+                lrc_text, _ = split_lrc(to_lrc(res, header), mp3)
+                pathlib.Path(args.out_lrc).write_text(lrc_text, encoding="utf-8")
                 weak = sum(1 for m in res["matched_lines"] if m < 0.34)
                 result.update({
                     "ok": True,
