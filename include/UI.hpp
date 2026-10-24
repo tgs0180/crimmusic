@@ -12,6 +12,12 @@ struct SDL_Renderer;
 #include "Lyrics.hpp"
 #include "LyricsMaker.hpp"
 
+struct Area {
+    float x, y, w, h;
+};
+
+
+
 class UI {
     public:
         UI() =default;
@@ -85,4 +91,18 @@ class UI {
         std::vector<EditRow> editRows;
         bool editDirty{false};
         std::string editStatus;
+
+        void drawNpTopBar(Area a);
+        void drawNpHeader(Area a);
+        void drawNpCover(Area a);
+        void drawNpTitle(Area a);
+        void drawNpControls(Area a);
+        void drawNpProgress(Area a);
+        void drawNpLyrics(Area a);
+        void drawNpBottomBar(Area a);
+
+        void layoutPortrait(Area full);
+        void layoutDesktop(Area full);
+
+        bool desktopLayout{false};
 };

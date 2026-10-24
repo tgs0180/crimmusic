@@ -8,6 +8,7 @@
 #include "imgui_impl_sdlrenderer3.h"
 #include <SDL3/SDL_dialog.h>
 #include <SDL3/SDL_render.h>
+#include <SDL3/SDL_video.h>
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
@@ -500,7 +501,13 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
         const ImGuiStyle& style = ImGui::GetStyle();
         float left = ImGui::GetCursorPosX();
         float width = ImGui::GetContentRegionAvail().x;
+        float height = ImGui::GetContentRegionAvail().y;
+        ImVec2 origin = ImGui::GetCursorScreenPos();
         auto centerX = [&](float itemWidth) { ImGui::SetCursorPosX(left + (width - itemWidth) / 2.0f); };
+
+        float ratio = width / height;
+        if (!desktopLayout && ratio > 1.25f) desktopLayout=true;
+        else if (desktopLayout && ratio < 1.10f) desktopLayout = false;
 
         if (ImGui::Button("X")) NowPlayingTarget = false;
         if (ImGui::IsKeyPressed(ImGuiKey_Escape)) NowPlayingTarget = false;
@@ -508,7 +515,13 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
         if (library.empty()) {
             ImGui::Text("Nothing is playing");
         }
+        
         else {
+            Area full{origin.x, origin.y, width, height};
+            if (desktopLayout) layoutDesktop(full);
+            else layoutPortrait(full);
+        }
+        /*else {
             const Track& t = library.song(library.currentIndex());
 
             float closeButtonRoom = (ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x) * 2;
@@ -589,7 +602,7 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
             drawVolume(player, volumeWidth);
 
             drawLyrics(player, library, left + quarter, row2Top, width / 2.0f, row2Height);
-        }
+        }*/
 
         ImGui::End();
     }
@@ -1074,4 +1087,89 @@ void UI::drawEditLyrics(Player &player, Library &library) {
     }
 
     ImGui::End();
+}
+
+static void drawPlaceholder(Area a, const char* name) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddRect(ImVec2(a.x, a.y), ImVec2(a.x + a.w, a.y + a.h), IM_COL32(255, 255, 255, 80));
+    dl->AddText(ImVec2(a.x + 4, a.y + 4), IM_COL32(255, 255, 255, 160), name);
+}
+
+void UI::drawNpTopBar(Area a) {
+    drawPlaceholder(a, "top bar");
+}
+
+void UI::drawNpHeader(Area a) {
+    drawPlaceholder(a, "header");
+}
+
+void UI::drawNpCover(Area a) {
+    drawPlaceholder(a, "cover");
+}
+
+void UI::drawNpTitle(Area a) {
+    drawPlaceholder(a, "title");
+}
+
+void UI::drawNpControls(Area a) {
+    drawPlaceholder(a, "controls");
+}
+
+void UI::drawNpProgress(Area a) {
+    drawPlaceholder(a, "progress");
+}
+
+void UI::drawNpLyrics(Area a) {
+    drawPlaceholder(a, "lyrics");
+}
+
+void UI::drawNpBottomBar(Area a) {
+    drawPlaceholder(a, "bottom bar");
+}
+
+void UI::layoutPortrait(Area full) {
+    const float topBar = 50, header = 90, title = 70, progress = 50, controls = 90, lyrics = 130, bottomBar = 50;
+    float fixed = topBar + header + title + progress + controls + lyrics + bottomBar;
+
+    float colW = std::min(full.w, 520.0f);
+    float colX = full.x + (full.w - colW) / 2;
+    float cover = std::max(80.0f, std::min(colW, full.h - fixed));
+
+    float y = full.y;
+    drawNpTopBar({full.x, y, full.w, topBar});                  y += topBar;
+    drawNpHeader({colX, y, colW, header});                      y += header;
+    drawNpCover({colX + (colW - cover) / 2, y, cover, cover});  y += cover;
+    drawNpTitle({colX, y, colW, title});                        y += title;
+    drawNpProgress({colX, y, colW, progress});                  y += progress;
+    drawNpControls({colX, y, colW, controls});                  y += controls;
+    drawNpLyrics({colX, y, colW, lyrics});
+    drawNpBottomBar({full.x, full.y + full.h - bottomBar, full.w, bottomBar});
+}
+
+void UI::layoutDesktop(Area full) {
+    const float topBar = 50, title = 90, progress = 50, controls = 100, lyrics = 160, bottomBar = 50;
+    const float margin = full.w * 0.06f;
+    const float gap = 60;
+
+    drawNpTopBar({full.x, full.y, full.w, topBar});
+    drawNpBottomBar({full.x, full.y + full.h - bottomBar, full.w, bottomBar});;
+
+
+    float midY = full.y + topBar;
+    float midH = full.h - topBar - bottomBar;
+
+    float cover = std::min(full.w * 0.42f, midH * 0.75f);
+    float coverX = full.x + margin;
+    float coverY = midY + (midH - cover) / 2;
+    drawNpCover({coverX, coverY, cover, cover});
+
+    float rightX = coverX + cover + gap;
+    float rightW = full.x + full.w - margin - rightX;
+
+    float block = title + progress + controls + lyrics;
+    float y = midY + (midH - block) / 2;
+    drawNpTitle({rightX, y, rightW, title});    y += title;
+    drawNpProgress({rightX, y, rightW, progress}); y+=progress;
+    drawNpControls({rightX, y, rightW, controls});  y+= controls;
+    drawNpLyrics({rightX, y, rightW, lyrics});
 }
