@@ -21,7 +21,6 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
-#include <cfloat>
 
 static void splitTime(float seconds, int& minutes, int& secs) {
     int total = static_cast<int>(seconds);
@@ -174,8 +173,8 @@ bool UI::init() {
     fontAtlas->AddFontFromFileTTF("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", 18.0f, & config);
     fontAtlas->AddFontFromFileTTF("/usr/share/fonts/noto/NotoSansMath-Regular.ttf", 18.0f, &config);
     fontBold = fontAtlas->AddFontFromFileTTF("/usr/share/fonts/noto/NotoSans-Bold.ttf", 18.0f);
-    fontAtlas->AddFontFromFileTTF(".../NotoSansCJK-Regular.ttc", 18.0f, &config);
-    fontAtlas->AddFontFromFileTTF(".../NotoSansMath-Regular.ttf", 18.0f, &config);
+    fontAtlas->AddFontFromFileTTF("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", 18.0f, &config);
+    fontAtlas->AddFontFromFileTTF("/usr/share/fonts/noto/NotoSansMath-Regular.ttf", 18.0f, &config);
 
     ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer3_Init(renderer);
@@ -523,8 +522,9 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
         
         else {
             Area full{origin.x, origin.y, width, height};
-            if (desktopLayout) layoutDesktop(full);
-            else layoutPortrait(full);
+            const Track& track = library.song(library.currentIndex());
+            if (desktopLayout) layoutDesktop(full, track);
+            else layoutPortrait(full, track);
         }
         /*else {
             const Track& t = library.song(library.currentIndex());
@@ -1102,6 +1102,16 @@ static void drawText(ImFont* font, float size, float x, float y, ImU32 colour, c
     ImGui::GetWindowDrawList()->AddText(font, size, ImVec2(x, y), colour, text);
 }
 
+static std::string fitTextIn(ImFont* font, float size, const std::string& text, float maxWidth) {
+    if (textWidth(font, size, text.c_str()) <= maxWidth) return text;
+    std::string cut = text;
+    while (!cut.empty() && textWidth(font, size, (cut + "...").c_str()) > maxWidth) {
+        cut.pop_back();
+        while (!cut.empty() && (static_cast<unsigned char>(cut.back()) & 0xC0) == 0x80) cut.pop_back();
+    }
+    return cut + "...";
+}
+
 static void drawPlaceholder(Area a, const char* name) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     dl->AddRect(ImVec2(a.x, a.y), ImVec2(a.x + a.w, a.y + a.h), IM_COL32(255, 255, 255, 80));
@@ -1112,16 +1122,58 @@ void UI::drawNpTopBar(Area a) {
     drawPlaceholder(a, "top bar");
 }
 
-void UI::drawNpHeader(Area a) {
-    drawPlaceholder(a, "header");
+void UI::drawNpHeader(Area a, const Track& track) {
+    ImU32 subtle = ImGui::GetColorU32(hexColor(palette::subtle));
+    ImU32 text = ImGui::GetColorU32(ImGuiCol_Text);
+
+    const char* label = "NOW PLAYING";
+    const float labelSize = 13.0f;
+    const float spacing = 4.0f;
+    float labelWidth = 0.0f;
+    for (const char* c = label; *c; c++) {
+        char letter[2] = {*c, '\0'};
+        labelWidth += textWidth(fontRegular, labelSize, letter) + spacing;
+    }
+    labelWidth -= spacing;
+
+    float x = a.x + (a.w - labelWidth) / 2;
+    float y = a.y + 6;
+    for (const char* c = label; *c; c++) {
+        char letter[2] = {*c, '\0'};
+        drawText(fontRegular, labelSize, x, y, subtle, letter);
+        x += textWidth(fontRegular, labelSize, letter) + spacing;
+    }
+    y += labelSize + 10;
+
+    const float titleSize = 26.0f;
+    std::string title = fitTextIn(fontRegular, titleSize, track.title, a.w);
+    drawText(fontRegular, titleSize, a.x + (a.w - textWidth(fontRegular, titleSize, title.c_str())) / 2, y, text, title.c_str());
+    y += titleSize + 6;
+
+    const float artistSize = 20.0f;
+    std::string artist = fitTextIn(fontRegular, artistSize, track.artist, a.w);
+    drawText(fontRegular, artistSize, a.x + (a.w - textWidth(fontRegular, artistSize, artist.c_str())) / 2, y, subtle, artist.c_str());
 }
 
-void UI::drawNpCover(Area a) {
+void UI::drawNpCover(Area a, const Track& track) {
     drawPlaceholder(a, "cover");
+    bigCovers.request(track.file);
+    auto tex = bigCovers.get(track.file);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 min(a.x, a.y);
+    ImVec2 max(a.x + a.w, a.y + a.h);
+
+    if (tex != nullptr) {
+        dl->AddImageRounded((ImTextureID)(intptr_t)tex, min, max, ImVec2(0,0), ImVec2(1,1), IM_COL32_WHITE, 12.0f);
+    }
+    else dl->AddRectFilled(min, max, ImGui::GetColorU32(hexColor(palette::surface)), 12.0f);
 }
 
-void UI::drawNpTitle(Area a) {
-    drawPlaceholder(a, "title");
+void UI::drawNpTitle(Area a, const Track& track) {
+    ImU32 text = ImGui::GetColorU32(ImGuiCol_Text);
+    ImU32 subtle = ImGui::GetColorU32(hexColor(palette::subtle));
+    drawText(fontBold, 32, a.x, a.y, text, fitTextIn(fontBold, 32, track.title, a.w).c_str());
+    drawText(fontRegular, 22, a.x, a.y + 32 + 4, subtle, fitTextIn(fontRegular, 22, track.artist, a.w).c_str());
 }
 
 void UI::drawNpControls(Area a) {
@@ -1140,7 +1192,7 @@ void UI::drawNpBottomBar(Area a) {
     drawPlaceholder(a, "bottom bar");
 }
 
-void UI::layoutPortrait(Area full) {
+void UI::layoutPortrait(Area full, const Track& track) {
     const float topBar = 50, header = 90, title = 70, progress = 50, controls = 90, lyrics = 130, bottomBar = 50;
     float fixed = topBar + header + title + progress + controls + lyrics + bottomBar;
 
@@ -1150,16 +1202,16 @@ void UI::layoutPortrait(Area full) {
 
     float y = full.y;
     drawNpTopBar({full.x, y, full.w, topBar});                  y += topBar;
-    drawNpHeader({colX, y, colW, header});                      y += header;
-    drawNpCover({colX + (colW - cover) / 2, y, cover, cover});  y += cover;
-    drawNpTitle({colX, y, colW, title});                        y += title;
+    drawNpHeader({colX, y, colW, header}, track);                      y += header;
+    drawNpCover({colX + (colW - cover) / 2, y, cover, cover}, track);  y += cover;
+    drawNpTitle({colX, y, colW, title}, track);                        y += title;
     drawNpProgress({colX, y, colW, progress});                  y += progress;
     drawNpControls({colX, y, colW, controls});                  y += controls;
     drawNpLyrics({colX, y, colW, lyrics});
     drawNpBottomBar({full.x, full.y + full.h - bottomBar, full.w, bottomBar});
 }
 
-void UI::layoutDesktop(Area full) {
+void UI::layoutDesktop(Area full, const Track& track) {
     const float topBar = 50, title = 90, progress = 50, controls = 100, lyrics = 160, bottomBar = 50;
     const float margin = full.w * 0.06f;
     const float gap = 60;
@@ -1174,14 +1226,14 @@ void UI::layoutDesktop(Area full) {
     float cover = std::min(full.w * 0.42f, midH * 0.75f);
     float coverX = full.x + margin;
     float coverY = midY + (midH - cover) / 2;
-    drawNpCover({coverX, coverY, cover, cover});
+    drawNpCover({coverX, coverY, cover, cover}, track);
 
     float rightX = coverX + cover + gap;
     float rightW = full.x + full.w - margin - rightX;
 
     float block = title + progress + controls + lyrics;
     float y = midY + (midH - block) / 2;
-    drawNpTitle({rightX, y, rightW, title});    y += title;
+    drawNpTitle({rightX, y, rightW, title}, track);    y += title;
     drawNpProgress({rightX, y, rightW, progress}); y+=progress;
     drawNpControls({rightX, y, rightW, controls});  y+= controls;
     drawNpLyrics({rightX, y, rightW, lyrics});

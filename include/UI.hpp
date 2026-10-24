@@ -12,6 +12,7 @@ struct SDL_Renderer;
 #include "Lyrics.hpp"
 #include "LyricsMaker.hpp"
 #include"imgui.h"
+#include "Track.hpp"
 
 struct Area {
     float x, y, w, h;
@@ -94,16 +95,16 @@ class UI {
         std::string editStatus;
 
         void drawNpTopBar(Area a);
-        void drawNpHeader(Area a);
-        void drawNpCover(Area a);
-        void drawNpTitle(Area a);
+        void drawNpHeader(Area a, const Track& track);
+        void drawNpCover(Area a, const Track& track);
+        void drawNpTitle(Area a, const Track& track);
         void drawNpControls(Area a);
         void drawNpProgress(Area a);
         void drawNpLyrics(Area a);
         void drawNpBottomBar(Area a);
 
-        void layoutPortrait(Area full);
-        void layoutDesktop(Area full);
+        void layoutPortrait(Area full, const Track& track);
+        void layoutDesktop(Area full, const Track& track);
 
         bool desktopLayout{false};
 
