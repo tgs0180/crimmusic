@@ -11,6 +11,7 @@ struct SDL_Renderer;
 #include "IconSet.hpp"
 #include "Lyrics.hpp"
 #include "LyricsMaker.hpp"
+#include"imgui.h"
 
 struct Area {
     float x, y, w, h;
@@ -105,4 +106,7 @@ class UI {
         void layoutDesktop(Area full);
 
         bool desktopLayout{false};
+
+        ImFont* fontRegular{nullptr};
+        ImFont* fontBold{nullptr};
 };

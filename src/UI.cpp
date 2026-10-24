@@ -10,6 +10,7 @@
 #include <SDL3/SDL_render.h>
 #include <SDL3/SDL_video.h>
 #include <algorithm>
+#include <cfloat>
 #include <cstdint>
 #include <iostream>
 #include <cstddef>
@@ -20,6 +21,7 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
+#include <cfloat>
 
 static void splitTime(float seconds, int& minutes, int& secs) {
     int total = static_cast<int>(seconds);
@@ -168,10 +170,13 @@ bool UI::init() {
     auto fontAtlas = ImGui::GetIO().Fonts;
     ImFontConfig config;
     config.MergeMode = true;
-    fontAtlas->AddFontFromFileTTF("/usr/share/fonts/noto/NotoSans-Regular.ttf", 18.0f);
+    fontRegular = fontAtlas->AddFontFromFileTTF("/usr/share/fonts/noto/NotoSans-Regular.ttf", 18.0f);
     fontAtlas->AddFontFromFileTTF("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", 18.0f, & config);
     fontAtlas->AddFontFromFileTTF("/usr/share/fonts/noto/NotoSansMath-Regular.ttf", 18.0f, &config);
-    
+    fontBold = fontAtlas->AddFontFromFileTTF("/usr/share/fonts/noto/NotoSans-Bold.ttf", 18.0f);
+    fontAtlas->AddFontFromFileTTF(".../NotoSansCJK-Regular.ttc", 18.0f, &config);
+    fontAtlas->AddFontFromFileTTF(".../NotoSansMath-Regular.ttf", 18.0f, &config);
+
     ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer3_Init(renderer);
 
@@ -1087,6 +1092,14 @@ void UI::drawEditLyrics(Player &player, Library &library) {
     }
 
     ImGui::End();
+}
+
+static float textWidth(ImFont* font, float size, const char* text) {
+    return font->CalcTextSizeA(size, FLT_MAX, 0.0f, text).x;
+}
+
+static void drawText(ImFont* font, float size, float x, float y, ImU32 colour, const char* text) {
+    ImGui::GetWindowDrawList()->AddText(font, size, ImVec2(x, y), colour, text);
 }
 
 static void drawPlaceholder(Area a, const char* name) {
