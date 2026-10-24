@@ -8,8 +8,9 @@
 #include <sstream>
 
 
-bool SoundCloud::runSearch(const std::string& query, std::vector<RemoteTrack>& out, std::string& error) {
-    std::string searchArg = "scsearch5:" + query;
+bool SoundCloud::runSearch(const std::string& query, Source source, std::vector<RemoteTrack>& out, std::string& error) {
+    std::string prefix = source == Source::YouTube ? "ytsearch10:" : "scsearch5:";
+    std::string searchArg = prefix + query;
     const char* args[] = { "yt-dlp", "--flat-playlist", "--dump-json", "--no-warnings", searchArg.c_str(), nullptr};
     SDL_Process* process = SDL_CreateProcess(args, true);
     if (process == nullptr) {
@@ -37,7 +38,8 @@ bool SoundCloud::runSearch(const std::string& query, std::vector<RemoteTrack>& o
             track.uploader = json.value("uploader", "Unknown");
             track.url = json.value("webpage_url", "");
             track.id = json.value("id", "");
-            track.duration = json.value("duration", 0.0f);
+            if (json.contains("duration") && json["duration"].is_number()) track.duration = json["duration"].get<float>();
+            track.source = source;
             out.push_back(track);
         }
         catch (const std::exception&) {
@@ -52,10 +54,10 @@ SearchSnapshot SoundCloud::snapshot() {
     return shared;
 }
 
-void SoundCloud::searchWorker(std::string query) {
+void SoundCloud::searchWorker(std::string query, Source source) {
     std::vector<RemoteTrack> localResults;
     std::string error;
-    bool ok = runSearch(query, localResults, error);
+    bool ok = runSearch(query, source, localResults, error);
     std::lock_guard<std::mutex> lock(mutex);
     if (ok) {
         shared.results = std::move(localResults);
@@ -68,20 +70,21 @@ void SoundCloud::searchWorker(std::string query) {
 
 }
 
-void SoundCloud::startSearch(const std::string &query) {
+void SoundCloud::startSearch(const std::string &query, Source source) {
     std::lock_guard<std::mutex> lock(mutex);
     if (shared.state == SearchState::Searching) return;
     shared.state = SearchState::Searching;
     shared.error = "";
     if (searchThread.joinable()) searchThread.join();
-    searchThread = std::thread(&SoundCloud::searchWorker, this, query);
+    searchThread = std::thread(&SoundCloud::searchWorker, this, query, source);
 }
 
 
 
-bool SoundCloud::runDownload(const std::string &url, const std::filesystem::path &folder, std::string &error) {
+bool SoundCloud::runDownload(const RemoteTrack &track, const std::filesystem::path &folder, std::string &error) {
     std::string folderstr = folder.string();
-    const char* args[] = {"yt-dlp", "-x", "--audio-format", "mp3","--embed-thumbnail", "--embed-metadata", "--no-playlist", "--no-warnings", "-P", folderstr.c_str(), "-o", "%(uploader)s - %(title)s.%(ext)s", "--", url.c_str(), nullptr};
+    const char* name = track.source == Source::YouTube ? "%(title)s.%(ext)s" : "%(uploader)s - %(title)s.%(ext)s";
+    const char* args[] = {"yt-dlp", "-x", "--audio-format", "mp3","--embed-thumbnail", "--embed-metadata", "--no-playlist", "--no-warnings", "-P", folderstr.c_str(), "-o", name, "--", track.url.c_str(), nullptr};
     SDL_Process* process = SDL_CreateProcess(args, true);
     if (process == nullptr) {
         error = "Could not start yt-dlp";
@@ -100,7 +103,7 @@ bool SoundCloud::runDownload(const std::string &url, const std::filesystem::path
 
 void SoundCloud::downloadWorker(RemoteTrack track, std::filesystem::path folder) {
     std::string error;
-    bool ok = runDownload(track.url, folder, error);
+    bool ok = runDownload(track, folder, error);
     std::lock_guard<std::mutex> lock(mutex);
     for (Download& download : shared.downloads) {
         if (download.track.id == track.id){

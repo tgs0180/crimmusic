@@ -627,17 +627,22 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
 
     if (showSoundCloud) {
         ImGui::SetNextWindowSize(ImVec2(700, 400), ImGuiCond_Appearing);
-        ImGui::Begin("SoundCloud", &showSoundCloud);
+        ImGui::Begin("Search 3rd party", &showSoundCloud);
         SearchSnapshot snap = soundcloud.snapshot();
         bool busy = (snap.state == SearchState::Searching);
         ImGui::BeginDisabled(busy);
-        bool enter = ImGui::InputTextWithHint("##scquery", "Search soundcloud...", soundCloudQuery, sizeof(soundCloudQuery), ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::RadioButton("SoundCloud", &searchSource, 0);
+        ImGui::SameLine();
+        ImGui::RadioButton("YouTube", &searchSource, 1);
+        Source source = searchSource == 1 ? Source::YouTube : Source::SoundCloud;
+        const char* hint = source == Source::YouTube ? "Search YouTube..." : "Search SoundCloud...";
+        bool enter = ImGui::InputTextWithHint("##scquery", hint, soundCloudQuery, sizeof(soundCloudQuery), ImGuiInputTextFlags_EnterReturnsTrue);
         ImGui::SameLine();
         bool clicked = ImGui::Button("Search");
         ImGui::EndDisabled();
         if (enter || clicked) {
             if (soundCloudQuery[0] != '\0') {
-                soundcloud.startSearch(soundCloudQuery);
+                soundcloud.startSearch(soundCloudQuery, source);
             }
         }
         if (snap.state == SearchState::Searching) ImGui::Text("Searching...");

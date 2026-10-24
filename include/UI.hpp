@@ -45,6 +45,7 @@ class UI {
         static void onFolderChosen(void* userdata, const char* const* filelist, int filter);
         bool showSoundCloud{false};
         char soundCloudQuery[128] = "";
+        int searchSource{0};
         bool iconButton(const char* iconName, bool active = false, float size = 0.0f);
 
         std::mutex folderMutex;

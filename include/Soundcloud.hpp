@@ -7,12 +7,15 @@
 
 enum class DownloadState{ Downloading, Done, Failed};
 
+enum class Source { SoundCloud, YouTube };
+
 struct RemoteTrack {
     std::string id;
     std::string title;
     std::string uploader;
     std::string url;
     float duration{0.0f};
+    Source source = Source::SoundCloud;
 };
 
 struct Download {
@@ -31,20 +34,20 @@ struct SearchSnapshot {
 
 class SoundCloud {
     public:
-        static bool runSearch(const std::string& query, std::vector<RemoteTrack>& out, std::string& error);
+        static bool runSearch(const std::string& query, Source source, std::vector<RemoteTrack>& out, std::string& error);
         SoundCloud() = default;
         ~SoundCloud();
         SoundCloud(const SoundCloud&) = delete;
         SoundCloud& operator=(const SoundCloud&) = delete;
-        void startSearch(const std::string& query);
+        void startSearch(const std::string& query, Source source);
         SearchSnapshot snapshot();
-        static bool runDownload(const std::string& url, const std::filesystem::path& folder, std::string& error);
+        static bool runDownload(const RemoteTrack& track, const std::filesystem::path& folder, std::string& error);
         void startDownload(const RemoteTrack& track);
         void setDownloadFolder(const std::filesystem::path& folder);
         bool takeFinishedDownloads();
 
     private:
-        void searchWorker(std::string query);
+        void searchWorker(std::string query, Source source);
         std::mutex mutex;
         SearchSnapshot shared;
         std::thread searchThread;
