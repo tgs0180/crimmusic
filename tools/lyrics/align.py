@@ -106,6 +106,8 @@ def lyric_lines(plain, filter_lines=True):
         line = re.sub(r"\d*\s*Embed$", "", line).strip()
         if not line: continue
         if re.fullmatch(r"\[.*\]", line): continue
+        line = re.sub(r"\s*\[[^\]]*\]", "", line).strip()
+        if not line: continue
         if re.fullmatch(r"\(?\s*(prod(\.|uced)?|produced by|beat by|mixed by)\b.*", line, re.I): continue
         if line.startswith("**") or re.fullmatch(r"!!.*!!", line): continue
         if not re.search(r"[^\W\d_]", line): continue
