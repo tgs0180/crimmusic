@@ -1339,7 +1339,11 @@ void UI::drawNpLyrics(Area a, Player& player, const Track& track) {
     ImVec4 grey = hexColor(palette::subtle);
     float dim = transcribed ? 0.7f : 1.0f;
 
-    dl->PushClipRect(ImVec2(a.x, lineTop + 2), ImVec2(a.x + a.w, lineBottom - 1), true);
+    float windowLeft = ImGui::GetWindowPos().x;
+    float windowRight = windowLeft + ImGui::GetWindowSize().x;
+    float centreX = a.x + a.w / 2;
+    float maxWidth = 2.0f * std::min(centreX - windowLeft, windowRight - centreX) - 48.0f;
+    dl->PushClipRect(ImVec2(windowLeft, lineTop + 2), ImVec2(windowRight, lineBottom - 1), true);
     int first = static_cast<int>(std::floor(npLyricScroll)) - 2;
     for (int i = first; i <= first + 5; i++) {
         if (i < 0 || static_cast<std::size_t>(i) >= lines.size()) continue;
@@ -1350,10 +1354,10 @@ void UI::drawNpLyrics(Area a, Player& player, const Track& track) {
         ImFont* font = closeness > 0.5f ? fontBold : fontRegular;
         float alpha = (d <= 1.0f ? 0.6f + 0.4f * closeness : 0.6f * std::max(0.0f, 2.0f - d)) * dim;
         ImVec4 colour(grey.x + (pink.x - grey.x) * closeness, grey.y + (pink.y - grey.y) * closeness, grey.z + (pink.z - grey.z) * closeness, alpha);
-        std::string text = fitTextIn(font, size, lines[static_cast<std::size_t>(i)].text, a.w * 0.9f);
+        std::string text = fitTextIn(font, size, lines[static_cast<std::size_t>(i)].text, maxWidth);
         if (text.empty()) continue;
         float y = centreY + offset * spacing - size / 2;
-        drawText(font, size, a.x + (a.w - textWidth(font, size, text.c_str())) / 2, y, ImGui::GetColorU32(colour), text.c_str());
+        drawText(font, size, centreX - textWidth(font, size, text.c_str()) / 2, y, ImGui::GetColorU32(colour), text.c_str());
     }
     dl->PopClipRect();
 }
