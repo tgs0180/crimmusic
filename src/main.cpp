@@ -6,6 +6,7 @@
 #include "Library.hpp"
 #include "Settings.hpp"
 #include "Mpris.hpp"
+#include "Discord.hpp"
 
 namespace fs = std::filesystem;
 
@@ -25,7 +26,7 @@ int main(int argc, char* argv[]){
         if (!player.play(library.currentSong())) return 1;
     }
     soundcloud.setDownloadFolder(root);
-
+    Discord discord;
     Mpris mpris;
     if (!mpris.init(player, library)) std::cerr << "MPRIS not available, media keys wont work\n";
 
@@ -34,6 +35,7 @@ int main(int argc, char* argv[]){
 
     while (ui.processEvents()) {
         mpris.poll();
+        discord.poll(player, library);
         if (player.isFinished()) {
             if (library.repeatMode() == RepeatMode::One) player.play(library.currentSong());
             else if (library.repeatMode() == RepeatMode::Off) {

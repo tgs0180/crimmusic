@@ -5,6 +5,7 @@
 #include "StringUtils.hpp"
 #include <taglib/fileref.h>
 #include <taglib/tag.h>
+#include <taglib/tpropertymap.h>
 
 static Track readTrack(const std::filesystem::path& file) {
     Track track;
@@ -14,6 +15,8 @@ static Track readTrack(const std::filesystem::path& file) {
     if (!ref.isNull() && ref.tag()) {
         track.title = ref.tag()->title().toCString(true);
         track.artist = ref.tag()->artist().toCString(true);
+        TagLib::PropertyMap properties = ref.properties();
+        if (properties.contains("PURL")) track.url = properties["PURL"].front().toCString(true);
     }
     if (track.title.empty()) track.title = file.stem().string();
     if (track.artist.empty()) track.artist = "Unknown";
