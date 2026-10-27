@@ -151,8 +151,9 @@ bool UI::iconButton(const char *iconName, bool active, float size) {
     ImVec4 tint = active ? hexColor(palette::crimson) : ImVec4(1, 1, 1, 1);
     return ImGui::ImageButton(iconName, (ImTextureID)(intptr_t)tex, ImVec2(size, size), ImVec2(0,0), ImVec2(1,1), ImVec4(0,0,0,0), tint);
 }
-
+// where shit gets drawn
 bool UI::init() {
+    SDL_SetAppMetadata("crimmusic", "1.0", "crimmusic");
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n";
         return false;
@@ -531,88 +532,6 @@ void UI::draw(Player &player, Library &library, SoundCloud &soundcloud) {
             if (desktopLayout) layoutDesktop(full, track, player, library);
             else layoutPortrait(full, track, player, library);
         }
-        /*else {
-            const Track& t = library.song(library.currentIndex());
-
-            float closeButtonRoom = (ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x) * 2;
-            std::string title = fitText(t.title, width - closeButtonRoom);
-            std::string artist = fitText(t.artist, width - closeButtonRoom);
-            ImGui::SameLine();
-            centerX(ImGui::CalcTextSize(title.c_str()).x);
-            ImGui::TextUnformatted(title.c_str());
-            centerX(ImGui::CalcTextSize(artist.c_str()).x);
-            ImGui::TextDisabled("%s", artist.c_str());
-
-            float height = ImGui::GetContentRegionAvail().y;
-
-            const float bigIcon = 48.0f;
-            const float smallIcon = 32.0f;
-            float row1Height = bigIcon + style.FramePadding.y * 2;
-            float row2Height = smallIcon + style.FramePadding.y * 2;
-
-            float gap = 20.0f;
-            float reserved = gap + gap + row1Height + style.ItemSpacing.y + row2Height + gap;
-            float coverSize = std::max(64.0f, std::min(width * 0.6f, height - reserved));
-
-            float stackHeight = reserved - gap + coverSize;
-            ImGui::Dummy(ImVec2(0, std::max(0.0f, (height - stackHeight) / 2.0f)));
-
-            ImGui::Dummy(ImVec2(0, gap));
-            centerX(coverSize);
-            bigCovers.request(library.currentSong());
-            SDL_Texture* tex = bigCovers.get(library.currentSong());
-            if (tex) ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(coverSize, coverSize));
-            else ImGui::Dummy(ImVec2(coverSize, coverSize));
-            ImGui::Dummy(ImVec2(0, gap));
-
-            float rowTop = ImGui::GetCursorPosY();
-            float bigButtonWidth = bigIcon + style.FramePadding.x * 2;
-            float margin = width * 0.08f;
-
-            ImGui::SetCursorPosX(left + margin);
-            if (iconButton("skip-back", false, bigIcon)) {
-                library.previous();
-                player.play(library.currentSong());
-            }
-
-            float timeTextWidth = ImGui::CalcTextSize("00:00 / 00:00").x;
-            float sliderWidth = width - 2 * (margin + bigButtonWidth + style.ItemSpacing.x * 2) - timeTextWidth - style.ItemSpacing.x;
-            sliderWidth = std::max(50.0f, sliderWidth);
-            float blockWidth = sliderWidth + style.ItemSpacing.x + timeTextWidth;
-            ImGui::SameLine();
-            centerX(blockWidth);
-            ImGui::SetCursorPosY(rowTop + (row1Height - ImGui::GetFrameHeight()) / 2.0f);
-            drawTimeSlider(player, sliderWidth);
-
-            ImGui::SameLine();
-            ImGui::SetCursorPos(ImVec2(left + width - margin - bigButtonWidth, rowTop));
-            if (iconButton("skip-forward", false, bigIcon)) {
-                library.next();
-                player.play(library.currentSong());
-            }
-
-            float row2Top = rowTop + row1Height + style.ItemSpacing.y;
-            float smallButtonWidth = smallIcon + style.FramePadding.x * 2;
-
-            ImGui::SetCursorPos(ImVec2(left + margin, row2Top));
-            drawPlayPause(player, smallIcon);
-            ImGui::SameLine();
-            drawRepeat(library, smallIcon);
-            ImGui::SameLine();
-            drawShuffle(library, smallIcon);
-
-            float quarter = width / 4.0f;
-            float volumeWidth = std::max(60.0f, std::min(150.0f, quarter - margin - smallButtonWidth - style.ItemSpacing.x));
-            float rightGroupWidth = smallButtonWidth + style.ItemSpacing.x + volumeWidth;
-            ImGui::SameLine();
-            ImGui::SetCursorPos(ImVec2(left + width - margin - rightGroupWidth, row2Top));
-            drawQueue(player, library, smallIcon);
-            ImGui::SameLine();
-            ImGui::SetCursorPosY(row2Top + (row2Height - ImGui::GetFrameHeight()) / 2.0f);
-            drawVolume(player, volumeWidth);
-
-            drawLyrics(player, library, left + quarter, row2Top, width / 2.0f, row2Height);
-        }*/
 
         ImGui::End();
     }
